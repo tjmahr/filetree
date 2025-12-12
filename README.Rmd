@@ -1,0 +1,128 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# filetree
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+A (currently) largely vibecoded package for declarative filetrees. This package 
+is mostly a proof-of-concept or API experiment.
+
+## Installation
+
+You can install the development version of filetree from [GitHub](https://github.com/) with:
+
+``` r
+# install.packages("pak")
+pak::pak("tjmahr/filetree")
+```
+
+## Example
+
+Here is some data organized into nice folders.
+
+```{r demo}
+"./inst/demo-1" |> 
+  fs::dir_tree(recurse = TRUE)
+```
+
+We set up the filetree with `ft_init()`. Each *layer* is a level of hierarchy. At
+the root, when we list the folders, we see subjects. So the first layer is
+`"subject"`. Inside of a subject folder, when we list the folders, we see time
+points. The layer is therefore `"time"`. Finally, in the last level, we see out
+main data files, so we call this layer `"data"`. 
+
+```{r}
+library(filetree)
+
+ft <- ft_init(
+  root = "./inst/demo-1", 
+  layers = c("subject", "time", "data")
+)
+ft
+```
+
+Now, we define the patterns. First, we register and store regexes. These can be
+reused in patterns so we can describe things very succinctly. For example, after
+defining the regexes `subject` and `task`, we can say that files have the
+pattern `"{subject}_{task}.txt"`.
+
+```{r}
+ft <- ft |>
+  ft_add_regex(c(
+    subject = "\\w{2}-\\d{2}",
+    time = "day\\d{2}",
+    task = "red|green"
+  )) |> 
+  ft_add_dir_pattern(
+    layer = "time", 
+    patterns = "{time}"
+  ) |> 
+  ft_add_dir_pattern(
+    layer = "subject", 
+    patterns = "{subject}"
+  ) |> 
+  ft_add_file_pattern(
+    layer = "data",  
+    patterns = "{subject}_{task}.txt"
+  )
+ft
+```
+
+Now we can validate and parse the file names.
+
+```{r}
+# Look at the files
+ft |> ft_list() |> fs::path_rel()
+
+ft |> ft_index()
+```
+
+
+For comparison, here is a file tree with some problems. There is
+
+- a misformatted day folder
+- a file with the wrong subject
+- a file with a nonexisting task ("blue")
+
+```{r}
+ft <- "./inst/demo-2" |> 
+  ft_init(c("subject", "time", "data")) |>
+  ft_add_regex(c(
+    subject = "\\w{2}-\\d{2}",
+    time = "day\\d{2}",
+    task = "red|green"
+  )) |> 
+  ft_add_dir_pattern("time", "{time}") |> 
+  ft_add_dir_pattern("subject", "{subject}") |> 
+  ft_add_file_pattern("data", "{subject}_{task}.txt")
+
+ft |> 
+  ft_index() |> 
+  dplyr::filter(!.ok) |> 
+  split(~.rel) |> 
+  lapply(dplyr::pull, .problems)
+```
+
+
+It would be nice to 
+
+- [ ] check inventory/completeness. (Did you notice a missing "red" file in the
+  first tree?)
+  
+- [ ] constrain parent folder. (Maybe a "yellow" is given on and only on day 3.)
+  Or is that more of a dplyr-layer move for validation?
+
