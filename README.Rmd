@@ -117,6 +117,40 @@ ft |>
   lapply(dplyr::pull, .problems)
 ```
 
+The following example is meant to demonstrate how regexes define fields and
+those fields need to be consistent along a path.
+
+In the `time` layer, folders are named `day{time}`. In the data layer, files are named `"{subject}_{time}_{task}.txt"`. In this demo, there is a file where the time values don't match:
+
+```{r}
+ft <- "./inst/demo-3" |> 
+  ft_init(c("subject", "time", "data")) |>
+  ft_add_regex(c(
+    subject = "\\w{2}-\\d{2}",
+    time = "\\d{2}",
+    task = "red|green"
+  )) |> 
+  ft_add_dir_pattern("time", "day{time}") |> 
+  ft_add_dir_pattern("subject", "{subject}") |> 
+  ft_add_file_pattern("data", "{subject}_{time}_{task}.txt")
+
+ft |> 
+  ft_index() |> 
+  dplyr::filter(!.ok) |> 
+  split(~.rel) |> 
+  lapply(dplyr::pull, .problems)
+```
+
+Because the parsed out layers and fields need to kept separate, we get a lot of columns now: 
+
+```{r}
+ft |> 
+  ft_index() |> 
+  dplyr::glimpse()
+```
+
+
+***
 
 It would be nice to 
 
@@ -126,3 +160,5 @@ It would be nice to
 - [ ] constrain parent folder. (Maybe a "yellow" is given on and only on day 3.)
   Or is that more of a dplyr-layer move for validation?
 
+- [ ] add validation that we can reconstruct `.rel` from the concatentation of 
+  each layer?

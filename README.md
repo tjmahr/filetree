@@ -182,6 +182,60 @@ ft |>
 #> [1] "directory time='day3' matches no pattern"
 ```
 
+The following example is meant to demonstrate how regexes define fields
+and those fields need to be consistent along a path.
+
+In the `time` layer, folders are named `day{time}`. In the data layer,
+files are named `"{subject}_{time}_{task}.txt"`. In this demo, there is
+a file where the time values don’t match:
+
+``` r
+ft <- "./inst/demo-3" |> 
+  ft_init(c("subject", "time", "data")) |>
+  ft_add_regex(c(
+    subject = "\\w{2}-\\d{2}",
+    time = "\\d{2}",
+    task = "red|green"
+  )) |> 
+  ft_add_dir_pattern("time", "day{time}") |> 
+  ft_add_dir_pattern("subject", "{subject}") |> 
+  ft_add_file_pattern("data", "{subject}_{time}_{task}.txt")
+
+ft |> 
+  ft_index() |> 
+  dplyr::filter(!.ok) |> 
+  split(~.rel) |> 
+  lapply(dplyr::pull, .problems)
+#> $`ab-01/day03/ab-01_02_green.txt`
+#> $`ab-01/day03/ab-01_02_green.txt`[[1]]
+#> [1] "capture time='02' conflicts with time='03'"
+```
+
+Because the parsed out layers and fields need to kept separate, we get a
+lot of columns now:
+
+``` r
+ft |> 
+  ft_index() |> 
+  dplyr::glimpse()
+#> Rows: 5
+#> Columns: 12
+#> $ .path          <fs::path> "C:/Users/Tristan/Documents/GitRepos/filetree/inst…
+#> $ .rel           <fs::path> "ab-01/day01/ab-01_01_green.txt", "ab-01/day01/ab-…
+#> $ at_layer       <chr> "data", "data", "data", "data", "data"
+#> $ layer__subject <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01"
+#> $ layer__time    <chr> "day01", "day01", "day02", "day02", "day03"
+#> $ layer__data    <chr> "ab-01_01_green.txt", "ab-01_01_red.txt", "ab-01_02_gre…
+#> $ subject        <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01"
+#> $ time           <chr> "01", "01", "02", "02", "03"
+#> $ task           <chr> "green", "red", "green", "red", "green"
+#> $ pattern        <chr> "default", "default", "default", "default", "default"
+#> $ .ok            <lgl> TRUE, TRUE, TRUE, TRUE, FALSE
+#> $ .problems      <list> <>, <>, <>, <>, "capture time='02' conflicts with time=…
+```
+
+------------------------------------------------------------------------
+
 It would be nice to
 
 - [ ] check inventory/completeness. (Did you notice a missing “red” file
@@ -189,3 +243,6 @@ It would be nice to
 
 - [ ] constrain parent folder. (Maybe a “yellow” is given on and only on
   day 3.) Or is that more of a dplyr-layer move for validation?
+
+- [ ] add validation that we can reconstruct `.rel` from the
+  concatentation of each layer?
