@@ -121,21 +121,22 @@ ft |> ft_list() |> fs::path_rel()
 #> inst/demo-1/ac-02/day03/ac-02_red.txt
 
 ft |> ft_index()
-#> # A tibble: 11 × 10
-#>    .path         .rel       at_layer subject time  data  pattern .ok   .problems
-#>    <fs::path>    <fs::path> <chr>    <chr>   <chr> <chr> <chr>   <lgl> <list>   
-#>  1 …01_green.txt …green.txt data     ab-01   day01 ab-0… default TRUE  <chr [0]>
-#>  2 …b-01_red.txt …1_red.txt data     ab-01   day01 ab-0… default TRUE  <chr [0]>
-#>  3 …01_green.txt …green.txt data     ab-01   day02 ab-0… default TRUE  <chr [0]>
-#>  4 …b-01_red.txt …1_red.txt data     ab-01   day02 ab-0… default TRUE  <chr [0]>
-#>  5 …01_green.txt …green.txt data     ab-01   day03 ab-0… default TRUE  <chr [0]>
-#>  6 …02_green.txt …green.txt data     ac-02   day01 ac-0… default TRUE  <chr [0]>
-#>  7 …c-02_red.txt …2_red.txt data     ac-02   day01 ac-0… default TRUE  <chr [0]>
-#>  8 …02_green.txt …green.txt data     ac-02   day02 ac-0… default TRUE  <chr [0]>
-#>  9 …c-02_red.txt …2_red.txt data     ac-02   day02 ac-0… default TRUE  <chr [0]>
-#> 10 …02_green.txt …green.txt data     ac-02   day03 ac-0… default TRUE  <chr [0]>
-#> 11 …c-02_red.txt …2_red.txt data     ac-02   day03 ac-0… default TRUE  <chr [0]>
-#> # ℹ 1 more variable: task <chr>
+#> # A tibble: 11 × 12
+#>    .path      .rel       at_layer layer__subject layer__time layer__data subject
+#>    <fs::path> <fs::path> <chr>    <chr>          <chr>       <chr>       <chr>  
+#>  1 …green.txt …green.txt data     ab-01          day01       ab-01_gree… ab-01  
+#>  2 …1_red.txt …1_red.txt data     ab-01          day01       ab-01_red.… ab-01  
+#>  3 …green.txt …green.txt data     ab-01          day02       ab-01_gree… ab-01  
+#>  4 …1_red.txt …1_red.txt data     ab-01          day02       ab-01_red.… ab-01  
+#>  5 …green.txt …green.txt data     ab-01          day03       ab-01_gree… ab-01  
+#>  6 …green.txt …green.txt data     ac-02          day01       ac-02_gree… ac-02  
+#>  7 …2_red.txt …2_red.txt data     ac-02          day01       ac-02_red.… ac-02  
+#>  8 …green.txt …green.txt data     ac-02          day02       ac-02_gree… ac-02  
+#>  9 …2_red.txt …2_red.txt data     ac-02          day02       ac-02_red.… ac-02  
+#> 10 …green.txt …green.txt data     ac-02          day03       ac-02_gree… ac-02  
+#> 11 …2_red.txt …2_red.txt data     ac-02          day03       ac-02_red.… ac-02  
+#> # ℹ 5 more variables: time <chr>, task <chr>, pattern <chr>, .ok <lgl>,
+#> #   .problems <list>
 ```
 
 For comparison, here is a file tree with some problems. There is
@@ -168,7 +169,7 @@ ft |>
 #> 
 #> $`ab-01/day02/ac-01_red.txt`
 #> $`ab-01/day02/ac-01_red.txt`[[1]]
-#> [1] "file capture subject='ac-01' conflicts with subject='ab-01'"
+#> [1] "capture subject='ac-01' conflicts with subject='ab-01'"
 #> 
 #> 
 #> $`ac-02/day3/ac-02_green.txt`

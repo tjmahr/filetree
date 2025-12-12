@@ -151,9 +151,11 @@ ft_index <- function(ft, files = ft_list(ft)) {
   dir_layers <- if (length(layers) >= 2) layers[-length(layers)] else character()
   file_layer <- layers[length(layers)]
 
-  # build one column per layer, including the final file-name layer
+  layer_cols <- paste0("layer__", layers)
+
+  # build one column per layer name (raw component), including final file-name layer
   layer_mat <- matrix(NA_character_, nrow = length(parts_list), ncol = length(layers))
-  colnames(layer_mat) <- layers
+  colnames(layer_mat) <- layer_cols
 
   at_layer <- character(length(parts_list))
 
@@ -178,15 +180,40 @@ ft_index <- function(ft, files = ft_list(ft)) {
   ) |>
     dplyr::bind_cols(tibble::as_tibble(layer_mat))
 
-  # extracted fields = placeholders not in layers
+  # extracted fields = placeholders not in layers (but captures may include layer names too;
+  # those should become extracted fields columns, not collide with layer__ columns)
   all_placeholders <- .ft_all_placeholder_names(ft)
-  extracted_fields <- setdiff(all_placeholders, layers)
-  if (length(extracted_fields)) {
-    for (nm in extracted_fields) tbl[[nm]] <- NA_character_
+
+  # create columns for ALL placeholders (speaker/visit/task/item/etc.)
+  # even if a placeholder name equals a layer name, it is still an extracted field column,
+  # because the raw layer component is stored in layer__<layer>.
+  if (length(all_placeholders)) {
+    for (nm in all_placeholders) {
+      if (is.null(tbl[[nm]])) tbl[[nm]] <- NA_character_
+    }
   }
 
   matched_pattern <- rep(NA_character_, nrow(tbl))
   problems <- vector("list", nrow(tbl))
+
+  # helper: write a capture with conflict checking against existing extracted field
+  set_capture <- function(tbl, i, cn, capv, msgs) {
+    capv <- as.character(unname(capv))
+    existing <- tbl[[cn]][i]
+    if (!is.na(existing) && !identical(existing, capv)) {
+      msgs <- c(msgs, sprintf("capture %s='%s' conflicts with %s='%s'", cn, capv, cn, existing))
+    } else {
+      tbl[[cn]][i] <- capv
+    }
+
+    # optional: validate capture against regex_pool if present
+    rx <- ft$regex_pool[[cn]]
+    if (!is.null(rx) && !is.na(tbl[[cn]][i]) && !stringr::str_detect(tbl[[cn]][i], paste0("^", rx, "$"))) {
+      msgs <- c(msgs, sprintf("capture %s='%s' fails /%s/", cn, tbl[[cn]][i], rx))
+    }
+
+    list(tbl = tbl, msgs = msgs)
+  }
 
   for (i in seq_len(nrow(tbl))) {
     msgs <- character()
@@ -204,34 +231,24 @@ ft_index <- function(ft, files = ft_list(ft)) {
 
     # ---- validate / extract from directory names (dir_layers only) ----
     for (layer in dir_layers) {
-      val <- tbl[[layer]][i]
-      if (is.na(val)) next
+      raw_val <- tbl[[paste0("layer__", layer)]][i]
+      if (is.na(raw_val)) next
 
       spec <- ft$dir_patterns[[layer]]
       if (is.null(spec) || length(spec) == 0) next # unconstrained dir layer
 
       found <- FALSE
       for (pat_nm in names(spec$compiled)) {
-        m <- stringr::str_match(val, spec$compiled[[pat_nm]])
+        m <- stringr::str_match(raw_val, spec$compiled[[pat_nm]])
         if (!all(is.na(m))) {
           found <- TRUE
 
           cap_names <- setdiff(colnames(m), "")
           for (cn in cap_names) {
-            capv <- as.character(unname(m[1, cn]))
-            if (cn %in% layers) {
-              existing <- as.character(tbl[[cn]][i])
-              if (!is.na(existing) && !identical(existing, capv)) {
-                msgs <- c(msgs, sprintf("dir capture %s='%s' conflicts with %s='%s'",
-                                        cn, capv, cn, existing))
-              }
-            } else {
-              tbl[[cn]][i] <- capv
-              rx <- ft$regex_pool[[cn]]
-              if (!is.null(rx) && !stringr::str_detect(capv, paste0("^", rx, "$"))) {
-                msgs <- c(msgs, sprintf("dir capture %s='%s' fails /%s/", cn, capv, rx))
-              }
-            }
+            capv <- m[1, cn]
+            res <- set_capture(tbl, i, cn, capv, msgs)
+            tbl <- res$tbl
+            msgs <- res$msgs
           }
 
           break
@@ -239,7 +256,7 @@ ft_index <- function(ft, files = ft_list(ft)) {
       }
 
       if (!found) {
-        msgs <- c(msgs, sprintf("directory %s='%s' matches no pattern", layer, val))
+        msgs <- c(msgs, sprintf("directory %s='%s' matches no pattern", layer, raw_val))
       }
     }
 
@@ -251,7 +268,7 @@ ft_index <- function(ft, files = ft_list(ft)) {
       next
     }
 
-    fname <- tbl[[file_layer]][i]
+    fname <- tbl[[paste0("layer__", file_layer)]][i]
     found_file <- FALSE
 
     for (pat_name in names(spec$compiled)) {
@@ -262,20 +279,10 @@ ft_index <- function(ft, files = ft_list(ft)) {
 
         cap_names <- setdiff(colnames(m), "")
         for (cn in cap_names) {
-          capv <- as.character(unname(m[1, cn]))
-          if (cn %in% layers) {
-            existing <- as.character(tbl[[cn]][i])
-            if (!is.na(existing) && !identical(existing, capv)) {
-              msgs <- c(msgs, sprintf("file capture %s='%s' conflicts with %s='%s'",
-                                      cn, capv, cn, existing))
-            }
-          } else {
-            tbl[[cn]][i] <- capv
-            rx <- ft$regex_pool[[cn]]
-            if (!is.null(rx) && !stringr::str_detect(capv, paste0("^", rx, "$"))) {
-              msgs <- c(msgs, sprintf("file capture %s='%s' fails /%s/", cn, capv, rx))
-            }
-          }
+          capv <- m[1, cn]
+          res <- set_capture(tbl, i, cn, capv, msgs)
+          tbl <- res$tbl
+          msgs <- res$msgs
         }
 
         break
@@ -294,9 +301,13 @@ ft_index <- function(ft, files = ft_list(ft)) {
   tbl$.problems <- problems
   tbl$.ok <- lengths(problems) == 0
 
-  tbl |>
-    dplyr::relocate(dplyr::all_of(layers), .after = at_layer) |>
-    dplyr::relocate(pattern, .ok, .problems, .after = dplyr::all_of(layers))
+  # order columns: raw layer__ columns, then extracted fields, then diagnostics
+  core <- c(".path", ".rel", "at_layer", layer_cols)
+  diag <- c("pattern", ".ok", ".problems")
+  extracted <- setdiff(names(tbl), c(core, diag))
+  tbl <- tbl[, c(core, extracted, diag)]
+
+  tbl
 }
 
 # ---- nice format + print ----
