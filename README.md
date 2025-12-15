@@ -7,8 +7,11 @@
 
 <!-- badges: end -->
 
-A (currently) largely vibecoded package for declarative filetrees. This
-package is mostly a proof-of-concept or API experiment.
+A (currently) largely **vibecoded** package for declarative filetrees.
+This package is mostly a proof-of-concept or an API experiment.
+
+- 🤖: R code
+- 🤓: README
 
 ## Installation
 

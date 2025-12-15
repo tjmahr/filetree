@@ -2,7 +2,6 @@
 
 S3method(format,filetree)
 S3method(print,filetree)
-export(.ft_all_placeholder_names)
 export(.ft_at_layer_from_parts)
 export(ft_add_dir_pattern)
 export(ft_add_file_pattern)

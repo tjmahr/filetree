@@ -6,6 +6,15 @@
 # deps: fs, stringr, tibble, dplyr, rlang
 
 # ---- constructors ----
+#' Create a filetree specification
+#'
+#' Build a `filetree` object that records the root directory, ordered layers,
+#' and slots for regex templates and patterns.
+#'
+#' @param root Path to the root directory used as the base for indexing.
+#' @param layers Character vector naming each path layer; the last element
+#'   represents the file-name layer.
+#' @return A `filetree` object describing the tree layout.
 #' @export
 ft_init <- function(root, layers) {
   stopifnot(is.character(layers), length(layers) >= 1, all(nzchar(layers)))
@@ -24,6 +33,14 @@ ft_init <- function(root, layers) {
     class = "filetree"
   )
 }
+#' Register regex templates used by patterns
+#'
+#' Add named regular expressions to the pool that can be referenced by
+#' placeholders such as `{subject}` inside directory or file patterns.
+#'
+#' @param ft A `filetree` object.
+#' @param regexes Named character vector of regular expressions to store.
+#' @return The updated `filetree` object.
 #' @export
 ft_add_regex <- function(ft, regexes) {
   stopifnot(inherits(ft, "filetree"), is.character(regexes), !is.null(names(regexes)))
@@ -71,6 +88,17 @@ ft_add_regex <- function(ft, regexes) {
 
 # ---- directory patterns ----
 # patterns validate (and may extract from) the directory name at `layer`
+
+#' Register directory name patterns for a layer
+#'
+#' Compile named patterns that validate and extract captures from directory
+#' names at a given layer in the tree.
+#'
+#' @param ft A `filetree` object.
+#' @param layer Directory layer name (must be one of the non-file layers).
+#' @param patterns Named character vector of patterns using `{placeholder}`
+#'   references that point into `ft`'s `regex_pool`.
+#' @return The updated `filetree` object.
 #' @export
 ft_add_dir_pattern <- function(ft, layer, patterns) {
   stopifnot(inherits(ft, "filetree"))
@@ -85,6 +113,17 @@ ft_add_dir_pattern <- function(ft, layer, patterns) {
 
 # ---- file patterns ----
 # patterns validate (and may extract from) the file name at `at_layer`
+
+#' Register file-name patterns for a layer
+#'
+#' Compile named patterns that validate and extract captures from file names
+#' for files that belong to a specific layer.
+#'
+#' @param ft A `filetree` object.
+#' @param layer Layer at which the files live (must be listed in `ft$layers`).
+#' @param patterns Named character vector of file-name patterns that may use
+#'   `{placeholder}` references tied to `ft`'s regex pool.
+#' @return The updated `filetree` object.
 #' @export
 ft_add_file_pattern <- function(ft, layer, patterns) {
   stopifnot(inherits(ft, "filetree"))
@@ -101,6 +140,12 @@ ft_add_file_pattern <- function(ft, layer, patterns) {
 
 # ---- file enumeration ----
 
+#' List files under the filetree root
+#'
+#' Return all files under the filetree root using the configured `fs` helper.
+#'
+#' @param ft A `filetree` object.
+#' @return Character vector of file paths relative to the working directory.
 #' @export
 ft_list <- function(ft) {
   stopifnot(inherits(ft, "filetree"))
@@ -109,6 +154,15 @@ ft_list <- function(ft) {
 
 # ---- indexing / parsing / validation ----
 
+#' Map path components to a layer name
+#'
+#' Determine which configured layer a path belongs to given its components.
+#'
+#' @param ft A `filetree` object.
+#' @param parts Character vector of path components including the file name.
+#' @return The layer name, `".__too_deep__"` if the path exceeds known layers,
+#'   or `NA_character_` when the path cannot be matched.
+#' @keywords internal
 #' @export
 .ft_at_layer_from_parts <- function(ft, parts) {
   # parts includes filename at end
@@ -119,7 +173,7 @@ ft_list <- function(ft) {
   ft$layers[[idx]]
 }
 
-#' @export
+
 .ft_all_placeholder_names <- function(ft) {
   out <- character()
 
@@ -140,6 +194,16 @@ ft_list <- function(ft) {
   unique(out)
 }
 
+#' Index files against a filetree specification
+#'
+#' Validate file paths against the configured directory and file-name patterns,
+#' extract placeholder captures, and report any problems.
+#'
+#' @param ft A `filetree` object.
+#' @param files Optional character vector of file paths to check. Defaults to
+#'   all files under `ft$root` via [ft_list()].
+#' @return A tibble with layer columns (`layer__<name>`), captured placeholders,
+#'   the matched pattern name, `.ok` flag, and `.problems` list-column.
 #' @export
 ft_index <- function(ft, files = ft_list(ft)) {
   stopifnot(inherits(ft, "filetree"))
@@ -193,108 +257,142 @@ ft_index <- function(ft, files = ft_list(ft)) {
     }
   }
 
-  matched_pattern <- rep(NA_character_, nrow(tbl))
-  problems <- vector("list", nrow(tbl))
+  n <- nrow(tbl)
+  matched_pattern <- rep(NA_character_, n)
+  problems <- vector("list", n)
 
-  # helper: write a capture with conflict checking against existing extracted field
-  set_capture <- function(tbl, i, cn, capv, msgs) {
-    capv <- as.character(unname(capv))
-    existing <- tbl[[cn]][i]
-    if (!is.na(existing) && !identical(existing, capv)) {
-      msgs <- c(msgs, sprintf("capture %s='%s' conflicts with %s='%s'", cn, capv, cn, existing))
-    } else {
-      tbl[[cn]][i] <- capv
+  # helper: write captures with conflict checking against existing extracted field
+  set_capture_vec <- function(tbl, idx, cn, values, msgs) {
+    if (!any(idx)) return(list(tbl = tbl, msgs = msgs))
+    values <- as.character(unname(values))
+    existing <- tbl[[cn]]
+
+    conflicts <- idx & !is.na(existing) & !is.na(values) & existing != values
+    if (any(conflicts)) {
+      for (j in which(conflicts)) {
+        msgs[[j]] <- c(
+          msgs[[j]],
+          sprintf("capture %s='%s' conflicts with %s='%s'", cn, values[[j]], cn, existing[[j]])
+        )
+      }
     }
 
-    # optional: validate capture against regex_pool if present
+    replace_idx <- idx & (is.na(existing) | existing == values)
+    if (any(replace_idx)) {
+      tbl[[cn]][replace_idx] <- values[replace_idx]
+    }
+
     rx <- ft$regex_pool[[cn]]
-    if (!is.null(rx) && !is.na(tbl[[cn]][i]) && !stringr::str_detect(tbl[[cn]][i], paste0("^", rx, "$"))) {
-      msgs <- c(msgs, sprintf("capture %s='%s' fails /%s/", cn, tbl[[cn]][i], rx))
+    if (!is.null(rx)) {
+      bad_rx <- idx & !is.na(tbl[[cn]]) & !stringr::str_detect(tbl[[cn]], paste0("^", rx, "$"))
+      if (any(bad_rx)) {
+        for (j in which(bad_rx)) {
+          msgs[[j]] <- c(
+            msgs[[j]],
+            sprintf("capture %s='%s' fails /%s/", cn, tbl[[cn]][[j]], rx)
+          )
+        }
+      }
     }
 
     list(tbl = tbl, msgs = msgs)
   }
 
-  for (i in seq_len(nrow(tbl))) {
-    msgs <- character()
-
-    if (tbl$at_layer[[i]] == ".__too_deep__") {
-      msgs <- c(msgs, sprintf("path deeper than layers (%d)", length(layers)))
-      problems[[i]] <- msgs
-      next
+  # pre-flag structural problems
+  too_deep <- tbl$at_layer == ".__too_deep__"
+  bad_root <- is.na(tbl$at_layer)
+  if (any(too_deep)) {
+    for (j in which(too_deep)) {
+      problems[[j]] <- c(problems[[j]], sprintf("path deeper than layers (%d)", length(layers)))
     }
-    if (is.na(tbl$at_layer[[i]])) {
-      msgs <- c(msgs, "file is at or above root; no matching at_layer")
-      problems[[i]] <- msgs
-      next
+  }
+  if (any(bad_root)) {
+    for (j in which(bad_root)) {
+      problems[[j]] <- c(problems[[j]], "file is at or above root; no matching at_layer")
     }
+  }
+  active <- !(too_deep | bad_root)
 
-    # ---- validate / extract from directory names (dir_layers only) ----
-    for (layer in dir_layers) {
-      raw_val <- tbl[[paste0("layer__", layer)]][i]
-      if (is.na(raw_val)) next
+  # ---- validate / extract from directory names (dir_layers only) ----
+  for (layer in dir_layers) {
+    raw_vals <- tbl[[paste0("layer__", layer)]]
+    spec <- ft$dir_patterns[[layer]]
+    if (is.null(spec) || length(spec) == 0) next
 
-      spec <- ft$dir_patterns[[layer]]
-      if (is.null(spec) || length(spec) == 0) next # unconstrained dir layer
+    layer_active <- active & !is.na(raw_vals)
+    if (!any(layer_active)) next
 
-      found <- FALSE
-      for (pat_nm in names(spec$compiled)) {
-        m <- stringr::str_match(raw_val, spec$compiled[[pat_nm]])
-        if (!all(is.na(m))) {
-          found <- TRUE
+    matched <- rep(FALSE, n)
+    for (pat_nm in names(spec$compiled)) {
+      m <- stringr::str_match(raw_vals, spec$compiled[[pat_nm]])
+      ok <- layer_active & !is.na(m[, 1]) & !matched
+      if (!any(ok)) next
 
-          cap_names <- setdiff(colnames(m), "")
-          for (cn in cap_names) {
-            capv <- m[1, cn]
-            res <- set_capture(tbl, i, cn, capv, msgs)
-            tbl <- res$tbl
-            msgs <- res$msgs
-          }
-
-          break
-        }
+      cap_names <- setdiff(colnames(m), "")
+      for (cn in cap_names) {
+        vals <- m[, cn]
+        res <- set_capture_vec(tbl, ok & !is.na(vals), cn, vals, problems)
+        tbl <- res$tbl
+        problems <- res$msgs
       }
-
-      if (!found) {
-        msgs <- c(msgs, sprintf("directory %s='%s' matches no pattern", layer, raw_val))
-      }
+      matched <- matched | ok
     }
 
-    # ---- validate / extract from file name via patterns at at_layer ----
-    spec <- ft$file_patterns[[tbl$at_layer[[i]]]]
+    unmatched <- layer_active & !matched
+    if (any(unmatched)) {
+      for (j in which(unmatched)) {
+        problems[[j]] <- c(
+          problems[[j]],
+          sprintf("directory %s='%s' matches no pattern", layer, raw_vals[[j]])
+        )
+      }
+    }
+  }
+
+  # ---- validate / extract from file name via patterns at at_layer ----
+  fname <- tbl[[paste0("layer__", file_layer)]]
+  for (layer in names(ft$file_patterns)) {
+    spec <- ft$file_patterns[[layer]]
+    layer_rows <- active & tbl$at_layer == layer
+    if (!any(layer_rows)) next
+
     if (is.null(spec) || length(spec) == 0L) {
-      msgs <- c(msgs, sprintf("no file patterns registered at_layer='%s'", tbl$at_layer[[i]]))
-      problems[[i]] <- msgs
+      for (j in which(layer_rows)) {
+        problems[[j]] <- c(
+          problems[[j]],
+          sprintf("no file patterns registered at_layer='%s'", tbl$at_layer[[j]])
+        )
+      }
       next
     }
 
-    fname <- tbl[[paste0("layer__", file_layer)]][i]
-    found_file <- FALSE
-
+    matched <- rep(FALSE, n)
     for (pat_name in names(spec$compiled)) {
       m <- stringr::str_match(fname, spec$compiled[[pat_name]])
-      if (!all(is.na(m))) {
-        found_file <- TRUE
-        matched_pattern[[i]] <- pat_name
+      ok <- layer_rows & !is.na(m[, 1]) & !matched
+      if (!any(ok)) next
 
-        cap_names <- setdiff(colnames(m), "")
-        for (cn in cap_names) {
-          capv <- m[1, cn]
-          res <- set_capture(tbl, i, cn, capv, msgs)
-          tbl <- res$tbl
-          msgs <- res$msgs
-        }
+      matched_pattern[ok] <- pat_name
+      cap_names <- setdiff(colnames(m), "")
+      for (cn in cap_names) {
+        vals <- m[, cn]
+        res <- set_capture_vec(tbl, ok & !is.na(vals), cn, vals, problems)
+        tbl <- res$tbl
+        problems <- res$msgs
+      }
 
-        break
+      matched <- matched | ok
+    }
+
+    unmatched <- layer_rows & !matched
+    if (any(unmatched)) {
+      for (j in which(unmatched)) {
+        problems[[j]] <- c(
+          problems[[j]],
+          sprintf("file '%s' matches no pattern at_layer='%s'", fname[[j]], tbl$at_layer[[j]])
+        )
       }
     }
-
-    if (!found_file) {
-      msgs <- c(msgs, sprintf("file '%s' matches no pattern at_layer='%s'",
-                              fname, tbl$at_layer[[i]]))
-    }
-
-    problems[[i]] <- msgs
   }
 
   tbl$pattern <- matched_pattern
@@ -312,6 +410,15 @@ ft_index <- function(ft, files = ft_list(ft)) {
 
 # ---- nice format + print ----
 
+#' Format a filetree summary
+#'
+#' Create a human-readable summary of the filetree configuration, including
+#' layers, regex pool size, and registered patterns.
+#'
+#' @param x A `filetree` object.
+#' @param ... Unused, included for method signature compatibility.
+#' @param width Optional output width forwarded to formatting helpers.
+#' @return Character vector with the formatted summary.
 #' @export
 format.filetree <- function(x, ..., width = getOption("width")) {
   stopifnot(inherits(x, "filetree"))
@@ -383,6 +490,14 @@ format.filetree <- function(x, ..., width = getOption("width")) {
   paste(lines, collapse = "\n")
 }
 
+#' Print a filetree summary
+#'
+#' Print the formatted summary of a `filetree` object to the console.
+#'
+#' @param x A `filetree` object.
+#' @param ... Unused, included for method signature compatibility.
+#' @param width Optional output width forwarded to [format.filetree()].
+#' @return The input `filetree` object, invisibly.
 #' @export
 print.filetree <- function(x, ..., width = getOption("width")) {
   cat(format(x, ..., width = width), "\n")
