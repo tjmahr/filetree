@@ -9,9 +9,12 @@
 
 A (currently) largely **vibecoded** package for declarative filetrees.
 This package is mostly a proof-of-concept or an API experiment.
+Contributions:
 
-- 🤖: R code
-- 🤓: README
+- 🤖: R code, roxygen2 descriptions
+- 🤓: README, DESCRIPTION, tests
+
+As I review and refactor things, they will move from robot to nerd.
 
 ## Installation
 
@@ -234,7 +237,26 @@ ft |>
 #> $ task           <chr> "green", "red", "green", "red", "green"
 #> $ pattern        <chr> "default", "default", "default", "default", "default"
 #> $ .ok            <lgl> TRUE, TRUE, TRUE, TRUE, FALSE
-#> $ .problems      <list> <>, <>, <>, <>, "capture time='02' conflicts with time=…
+#> $ .problems      <list> <NULL>, <NULL>, <NULL>, <NULL>, "capture time='02' conf…
+```
+
+## Current impressions
+
+I have been using this tool validate our speech corpus data on our
+network drives. The `ft_index()` operation is very expensive in this
+case because of the network access and the thousands upon thousands of
+files at play. I’ve found it better to instead do something like:
+
+``` r
+files_to_check <- fs::dir_ls(ft$root, recurse = TRUE, type = "file")
+results <- ft_index(ft, files_to_check)
+
+# Even faster to prefilter the tree if we are just interested in a particular
+# set of files
+files_to_check <- ft$root |> 
+  fs::dir_ls(recurse = TRUE, type = "file", regexp = ".txt$")
+
+results <- ft_index(ft, files_to_check)
 ```
 
 ------------------------------------------------------------------------
@@ -248,4 +270,6 @@ It would be nice to
   day 3.) Or is that more of a dplyr-layer move for validation?
 
 - [ ] add validation that we can reconstruct `.rel` from the
-  concatentation of each layer?
+  concatenation of each layer?
+
+- [ ] having a really good and fast way to see the problem files

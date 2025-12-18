@@ -5,7 +5,9 @@
 #
 # deps: fs, stringr, tibble, dplyr, rlang
 
+
 # ---- constructors ----
+
 #' Create a filetree specification
 #'
 #' Build a `filetree` object that records the root directory, ordered layers,
@@ -225,7 +227,7 @@ ft_index <- function(ft, files = ft_list(ft)) {
 
   for (i in seq_along(parts_list)) {
     parts <- parts_list[[i]]
-    fname <- tail(parts, 1)
+    fname <- utils::tail(parts, 1)
 
     n_dir <- max(length(parts) - 1L, 0L)
     if (n_dir > 0L && length(dir_layers) > 0L) {
@@ -460,7 +462,7 @@ format.filetree <- function(x, ..., width = getOption("width")) {
         } else {
           kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
           s <- paste(kv, collapse = ", ")
-          if (nchar(s) > 90) s <- paste0(substr(s, 1, 87), "…")
+          if (nchar(s) > 90) s <- paste0(substr(s, 1, 87), "\u2026")
           lines <- c(lines, sprintf("    - %s: %s", layer, s))
         }
       }
@@ -482,7 +484,7 @@ format.filetree <- function(x, ..., width = getOption("width")) {
       if (is.null(spec) || length(spec) == 0) next
       kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
       s <- paste(kv, collapse = ", ")
-      if (nchar(s) > 90) s <- paste0(substr(s, 1, 87), "…")
+      if (nchar(s) > 90) s <- paste0(substr(s, 1, 87), "\u2026")
       lines <- c(lines, sprintf("    - at_layer=%s: %s", layer, s))
     }
   }
@@ -503,18 +505,3 @@ print.filetree <- function(x, ..., width = getOption("width")) {
   cat(format(x, ..., width = width), "\n")
   invisible(x)
 }
-
-# ---- example (your demo-1) ----
-# ft <- ft_init("./inst/demo-1", layers = c("subject", "time", "data"))
-# ft <- ft |>
-#   ft_add_regex(c(
-#     subject = "\\w{2}-\\d{2}",
-#     time    = "day\\d{2}",
-#     task    = "red|green"
-#   )) |>
-#   ft_add_dir_pattern("subject", "{subject}") |>
-#   ft_add_dir_pattern("time", "{time}") |>
-#   ft_add_pattern(at_layer = "data", patterns = "{subject}_{task}\\.txt")
-# ft
-# idx <- ft_index(ft)
-# idx |> dplyr::filter(!.ok) |> dplyr::select(.rel, at_layer, .problems) |> print(n = 50)

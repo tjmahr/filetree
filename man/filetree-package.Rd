@@ -4,9 +4,17 @@
 \name{filetree-package}
 \alias{filetree}
 \alias{filetree-package}
-\title{filetree: What the Package Does (One Line, Title Case)}
+\title{filetree: Declarative File Tree Schemas and Validation}
 \description{
-What the package does (one paragraph).
+Provides a 'filetree' object for declaring the expected structure of a file hierarchy. A file listing can be parsed and validated against the declared file tree to extract metadata and identify structural and naming inconsistencies.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/tjmahr/filetree}
+  \item Report bugs at \url{https://github.com/tjmahr/filetree/issues}
+}
+
 }
 \author{
 \strong{Maintainer}: First Last \email{first.last@example.com}
