@@ -51,6 +51,7 @@ ft_add_regex <- function(ft, regexes) {
     stopifnot(length(rx) == 1, nzchar(rx))
     ft$regex_pool[[nm]] <- rx
   }
+  ft <- .ft_recompile_patterns(ft)
   ft
 }
 
@@ -86,6 +87,24 @@ ft_add_regex <- function(ft, regexes) {
   if (length(patterns) == 1 && is.null(names(patterns))) names(patterns) <- "default"
   stopifnot(!is.null(names(patterns)))
   patterns
+}
+
+.ft_recompile_patterns <- function(ft) {
+  for (layer in names(ft$dir_patterns)) {
+    spec <- ft$dir_patterns[[layer]]
+    if (is.null(spec) || length(spec) == 0) next
+    compiled <- lapply(spec$raw, .ft_compile_pattern, regex_pool = ft$regex_pool)
+    ft$dir_patterns[[layer]]$compiled <- compiled
+  }
+
+  for (at_layer in names(ft$file_patterns)) {
+    spec <- ft$file_patterns[[at_layer]]
+    if (is.null(spec) || length(spec) == 0) next
+    compiled <- lapply(spec$raw, .ft_compile_pattern, regex_pool = ft$regex_pool)
+    ft$file_patterns[[at_layer]]$compiled <- compiled
+  }
+
+  ft
 }
 
 # ---- directory patterns ----

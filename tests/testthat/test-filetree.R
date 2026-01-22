@@ -128,3 +128,40 @@ test_that("No problems in well-formed tree", {
     unique() |>
     expect_equal(0)
 })
+
+test_that("Pattern registration overwrites existing names and recompiles after regex updates", {
+  ft_overwrite <- ft_init(
+    root = root1,
+    layers = c("subject", "time", "data")
+  )
+
+  ft_overwrite <- ft_overwrite |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "day\\d{2}"
+    )) |>
+    ft_add_dir_pattern(
+      layer = "subject",
+      patterns = c(main = "{subject}")
+    )
+
+  ft_overwrite <- ft_overwrite |>
+    ft_add_dir_pattern(
+      layer = "subject",
+      patterns = c(main = "{time}")
+    )
+
+  expect_equal(ft_overwrite$dir_patterns$subject$raw[["main"]], "{time}")
+  expect_equal(
+    ft_overwrite$dir_patterns$subject$compiled[["main"]],
+    "^(?<time>(?:day\\d{2}))$"
+  )
+
+  ft_overwrite <- ft_overwrite |>
+    ft_add_regex(c(time = "day\\d{3}"))
+
+  expect_equal(
+    ft_overwrite$dir_patterns$subject$compiled[["main"]],
+    "^(?<time>(?:day\\d{3}))$"
+  )
+})
