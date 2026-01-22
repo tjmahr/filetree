@@ -5,6 +5,7 @@
 
 <!-- badges: start -->
 
+[![R-CMD-check](https://github.com/tjmahr/filetree/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/tjmahr/filetree/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 A (currently) largely **vibecoded** package for declarative filetrees.
