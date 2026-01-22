@@ -165,3 +165,23 @@ test_that("Pattern registration overwrites existing names and recompiles after r
     "^(?<time>(?:day\\d{3}))$"
   )
 })
+
+test_that("Regex pool anchors match layer boundaries when composed", {
+  ft_anchor <- ft_init(
+    root = root1,
+    layers = c("subject", "data")
+  )
+
+  ft_anchor <- ft_anchor |>
+    ft_add_regex(c(subject = "^[A-Z]{3}\\d{2}$")) |>
+    ft_add_dir_pattern(
+      layer = "subject",
+      patterns = "{subject}"
+    )
+
+  compiled <- ft_anchor$dir_patterns$subject$compiled[["default"]]
+
+  expect_true(stringr::str_detect("ABC12", compiled))
+  expect_false(stringr::str_detect("AAA123", compiled))
+  expect_false(stringr::str_detect("AAAA12", compiled))
+})

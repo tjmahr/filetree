@@ -73,6 +73,9 @@ ft_add_regex <- function(ft, regexes) {
   compiled <- pattern
   for (nm in ph) {
     rx <- regex_pool[[nm]]
+    # Rewrite anchors so nested regexes still respect layer boundaries when
+    # embedded into a full path pattern.
+    rx <- .ft_rewrite_pool_anchors(rx)
     compiled <- stringr::str_replace_all(
       compiled,
       stringr::fixed(paste0("{", nm, "}")),
@@ -80,6 +83,16 @@ ft_add_regex <- function(ft, regexes) {
     )
   }
   paste0("^", compiled, "$")
+}
+
+.ft_rewrite_pool_anchors <- function(rx) {
+  if (stringr::str_starts(rx, stringr::fixed("^"))) {
+    rx <- stringr::str_replace(rx, "^\\^", "(?:(?<=/)|^)")
+  }
+  if (stringr::str_ends(rx, stringr::fixed("$"))) {
+    rx <- stringr::str_replace(rx, "\\$$", "(?:(?=/)|$)")
+  }
+  rx
 }
 
 .ft_normalize_patterns <- function(patterns) {
