@@ -23,9 +23,9 @@ A (currently) largely **vibecoded** package for declarative filetrees. This
 package is mostly a proof-of-concept or an API experiment. Contributions:
 
 - 🤖: R code, roxygen2 descriptions
-- 🤓: README, DESCRIPTION, tests
+- 🤓: README
 
-As I review and refactor things, they will move from robot to nerd.
+If I review and refactor things, they will move from robot to nerd.
 
 
 ## Installation
@@ -99,11 +99,38 @@ ft |> ft_index()
 ```
 
 
-For comparison, here is a file tree with some problems. There is
+For comparison, here is a file tree with some problems. 
+
+```
+# fs::dir_tree("./inst/demo-2")
+├── ab-01
+│   ├── day01
+│   │   ├── ab-01_blue.txt       <---- 'blue' is not a valid task
+│   │   └── ab-01_red.txt
+│   ├── day02
+│   │   ├── ab-01_green.txt
+│   │   └── ac-01_red.txt        <---- wrong subject ('ac-01')
+│   └── day03
+│       └── ab-01_green.txt
+└── ac-02
+    ├── day01
+    │   ├── ac-02_green.txt
+    │   └── ac-02_red.txt
+    ├── day02
+    │   ├── ac-02_green.txt
+    │   └── ac-02_red.txt
+    └── day3                     <---- expected 2-digit format
+        ├── ac-02_green.txt    
+        └── ac-02_red.txt
+```
+
+That is,
 
 - a misformatted day folder
 - a file with the wrong subject
 - a file with a nonexisting task ("blue")
+
+We reuse the same patterns as earlier and find the bad file names: 
 
 ```{r}
 ft <- "./inst/demo-2" |> 
@@ -119,15 +146,54 @@ ft <- "./inst/demo-2" |>
 
 ft |> 
   ft_index() |> 
-  dplyr::filter(!.ok) |> 
-  split(~.rel) |> 
-  lapply(dplyr::pull, .problems)
+  ft_glimpse_problems()
 ```
 
-The following example is meant to demonstrate how regexes define fields and
-those fields need to be consistent along a path.
 
-In the `time` layer, folders are named `day{time}`. In the data layer, files are named `"{subject}_{time}_{task}.txt"`. In this demo, there is a file where the time values don't match:
+
+### Pattern consistency and conditional patterns
+
+The following example demonstrates 
+
+- that fields need to be consistent along a path
+- regexes and file patterns can be defined for only specific layer values
+
+In the `time` layer, folders are named `day{time}`. In the data layer, files are
+named `"{subject}_{time}_{task}.txt"`. In this demo, there is a file where the
+time values don't match. There is also a task `"yellow"` that only appears on
+`day03`.
+
+We need to identify that the `ab-01/day02/ab-01_01*` has inconsistent `time`
+values and that `ab-02/day02/[yellow]` is unexpected and `02/day03/[green]` is
+unexpected:
+
+```
+# fs::dir_tree("./inst/demo-3")
+./inst/demo-3
+├── ab-01
+│   ├── day01
+│   │   ├── ab-01_01_green.txt
+│   │   └── ab-01_01_red.txt
+│   ├── day02
+│   │   ├── ab-01_01_green.txt   <---- wrong time value
+│   │   └── ab-01_01_red.txt     <---- wrong time value
+│   └── day03
+│       └── ab-01_03_yellow.txt
+└── ab-02
+    ├── day01
+    │   ├── ab-02_01_green.txt
+    │   └── ab-02_01_red.txt
+    ├── day02
+    │   ├── ab-02_02_green.txt
+    │   ├── ab-02_02_red.txt
+    │   └── ab-02_02_yellow.txt  <---- can't go here
+    └── day03
+        └── ab-02_03_green.txt   <---- can't go here
+```
+
+We can make patterns apply conditionally by using `when = list(...)` to say which
+layers a pattern applies to. We can also conditionally override regex patterns 
+using `with = c(...)`.
 
 ```{r}
 ft <- "./inst/demo-3" |> 
@@ -139,16 +205,28 @@ ft <- "./inst/demo-3" |>
   )) |> 
   ft_add_dir_pattern("time", "day{time}") |> 
   ft_add_dir_pattern("subject", "{subject}") |> 
-  ft_add_file_pattern("data", "{subject}_{time}_{task}.txt")
+  ft_add_file_pattern(
+    "data", 
+    "{subject}_{time}_{task}.txt",
+    # limit when this pattern is used
+    when = list(time = c("01", "02")),
+  ) |> 
+  ft_add_file_pattern(
+    "data", 
+    "{subject}_{time}_{task}.txt",
+    # limit when this pattern is used
+    when = c(time = "03"),
+    # temporarily overwrite the pattern too
+    with = c(task = "yellow")
+  )
 
 ft |> 
   ft_index() |> 
-  dplyr::filter(!.ok) |> 
-  split(~.rel) |> 
-  lapply(dplyr::pull, .problems)
+  ft_glimpse_problems()
 ```
 
-Because the parsed out layers and fields need to kept separate, we get a lot of columns now: 
+
+Because the parsed out layers and fields need to kept separate from each other, we get a lot of columns now: 
 
 ```{r}
 ft |> 
@@ -184,7 +262,7 @@ It would be nice to
 - [ ] check inventory/completeness. (Did you notice a missing "red" file in the
   first tree?)
   
-- [ ] constrain parent folder. (Maybe a "yellow" is given on and only on day 3.)
+- [x] constrain parent folder. (Maybe a "yellow" is given on and only on day 3.)
   Or is that more of a dplyr-layer move for validation?
 
 - [ ] add validation that we can reconstruct `.rel` from the concatenation of 

@@ -13,9 +13,9 @@ This package is mostly a proof-of-concept or an API experiment.
 Contributions:
 
 - 🤖: R code, roxygen2 descriptions
-- 🤓: README, DESCRIPTION, tests
+- 🤓: README
 
-As I review and refactor things, they will move from robot to nerd.
+If I review and refactor things, they will move from robot to nerd.
 
 ## Installation
 
@@ -71,7 +71,7 @@ ft <- ft_init(
   layers = c("subject", "time", "data")
 )
 ft
-#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: <empty>
@@ -104,7 +104,7 @@ ft <- ft |>
     patterns = "{subject}_{task}.txt"
   )
 ft
-#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: 3 (subject, time, task)
@@ -146,11 +146,36 @@ ft |> ft_index()
 #> #   .problems <list>
 ```
 
-For comparison, here is a file tree with some problems. There is
+For comparison, here is a file tree with some problems.
+
+    # fs::dir_tree("./inst/demo-2")
+    ├── ab-01
+    │   ├── day01
+    │   │   ├── ab-01_blue.txt       <---- 'blue' is not a valid task
+    │   │   └── ab-01_red.txt
+    │   ├── day02
+    │   │   ├── ab-01_green.txt
+    │   │   └── ac-01_red.txt        <---- wrong subject ('ac-01')
+    │   └── day03
+    │       └── ab-01_green.txt
+    └── ac-02
+        ├── day01
+        │   ├── ac-02_green.txt
+        │   └── ac-02_red.txt
+        ├── day02
+        │   ├── ac-02_green.txt
+        │   └── ac-02_red.txt
+        └── day3                     <---- expected 2-digit format
+            ├── ac-02_green.txt    
+            └── ac-02_red.txt
+
+That is,
 
 - a misformatted day folder
 - a file with the wrong subject
 - a file with a nonexisting task (“blue”)
+
+We reuse the same patterns as earlier and find the bad file names:
 
 ``` r
 ft <- "./inst/demo-2" |> 
@@ -166,35 +191,64 @@ ft <- "./inst/demo-2" |>
 
 ft |> 
   ft_index() |> 
-  dplyr::filter(!.ok) |> 
-  split(~.rel) |> 
-  lapply(dplyr::pull, .problems)
-#> $`ab-01/day01/ab-01_blue.txt`
-#> $`ab-01/day01/ab-01_blue.txt`[[1]]
-#> [1] "file 'ab-01_blue.txt' matches no pattern at_layer='data'"
+  ft_glimpse_problems()
+#> 4/11 files with 4 problems.
 #> 
+#> ab-01/day01/ab-01_blue.txt
+#> - file 'ab-01_blue.txt' matches no pattern at_layer='data'
 #> 
-#> $`ab-01/day02/ac-01_red.txt`
-#> $`ab-01/day02/ac-01_red.txt`[[1]]
-#> [1] "capture subject='ac-01' conflicts with subject='ab-01'"
+#> ab-01/day02/ac-01_red.txt
+#> - capture subject='ac-01' conflicts with subject='ab-01'
 #> 
+#> ac-02/day3/ac-02_green.txt
+#> - directory time='day3' matches no pattern
 #> 
-#> $`ac-02/day3/ac-02_green.txt`
-#> $`ac-02/day3/ac-02_green.txt`[[1]]
-#> [1] "directory time='day3' matches no pattern"
-#> 
-#> 
-#> $`ac-02/day3/ac-02_red.txt`
-#> $`ac-02/day3/ac-02_red.txt`[[1]]
-#> [1] "directory time='day3' matches no pattern"
+#> ac-02/day3/ac-02_red.txt
+#> - directory time='day3' matches no pattern
 ```
 
-The following example is meant to demonstrate how regexes define fields
-and those fields need to be consistent along a path.
+### Pattern consistency and conditional patterns
+
+The following example demonstrates
+
+- that fields need to be consistent along a path
+- regexes and file patterns can be defined for only specific layer
+  values
 
 In the `time` layer, folders are named `day{time}`. In the data layer,
 files are named `"{subject}_{time}_{task}.txt"`. In this demo, there is
-a file where the time values don’t match:
+a file where the time values don’t match. There is also a task
+`"yellow"` that only appears on `day03`.
+
+We need to identify that the `ab-01/day02/ab-01_01*` has inconsistent
+`time` values and that `ab-02/day02/[yellow]` is unexpected and
+`02/day03/[green]` is unexpected:
+
+    # fs::dir_tree("./inst/demo-3")
+    ./inst/demo-3
+    ├── ab-01
+    │   ├── day01
+    │   │   ├── ab-01_01_green.txt
+    │   │   └── ab-01_01_red.txt
+    │   ├── day02
+    │   │   ├── ab-01_01_green.txt   <---- wrong time value
+    │   │   └── ab-01_01_red.txt     <---- wrong time value
+    │   └── day03
+    │       └── ab-01_03_yellow.txt
+    └── ab-02
+        ├── day01
+        │   ├── ab-02_01_green.txt
+        │   └── ab-02_01_red.txt
+        ├── day02
+        │   ├── ab-02_02_green.txt
+        │   ├── ab-02_02_red.txt
+        │   └── ab-02_02_yellow.txt  <---- can't go here
+        └── day03
+            └── ab-02_03_green.txt   <---- can't go here
+
+We can make patterns apply conditionally by using `when = list(...)` to
+say which layers a pattern applies to. We can also conditionally
+override regex patterns using `with = c(...)`.
 
 ``` r
 ft <- "./inst/demo-3" |> 
@@ -206,39 +260,60 @@ ft <- "./inst/demo-3" |>
   )) |> 
   ft_add_dir_pattern("time", "day{time}") |> 
   ft_add_dir_pattern("subject", "{subject}") |> 
-  ft_add_file_pattern("data", "{subject}_{time}_{task}.txt")
+  ft_add_file_pattern(
+    "data", 
+    "{subject}_{time}_{task}.txt",
+    # limit when this pattern is used
+    when = list(time = c("01", "02")),
+  ) |> 
+  ft_add_file_pattern(
+    "data", 
+    "{subject}_{time}_{task}.txt",
+    # limit when this pattern is used
+    when = c(time = "03"),
+    # temporarily overwrite the pattern too
+    with = c(task = "yellow")
+  )
 
 ft |> 
   ft_index() |> 
-  dplyr::filter(!.ok) |> 
-  split(~.rel) |> 
-  lapply(dplyr::pull, .problems)
-#> $`ab-01/day03/ab-01_02_green.txt`
-#> $`ab-01/day03/ab-01_02_green.txt`[[1]]
-#> [1] "capture time='02' conflicts with time='03'"
+  ft_glimpse_problems()
+#> 4/11 files with 4 problems.
+#> 
+#> ab-01/day02/ab-01_01_green.txt
+#> - capture time='01' conflicts with time='02'
+#> 
+#> ab-01/day02/ab-01_01_red.txt
+#> - capture time='01' conflicts with time='02'
+#> 
+#> ab-02/day02/ab-02_02_yellow.txt
+#> - file 'ab-02_02_yellow.txt' matches no pattern at_layer='data'
+#> 
+#> ab-02/day03/ab-02_03_green.txt
+#> - file 'ab-02_03_green.txt' matches no pattern at_layer='data'
 ```
 
-Because the parsed out layers and fields need to kept separate, we get a
-lot of columns now:
+Because the parsed out layers and fields need to kept separate from each
+other, we get a lot of columns now:
 
 ``` r
 ft |> 
   ft_index() |> 
   dplyr::glimpse()
-#> Rows: 5
+#> Rows: 11
 #> Columns: 12
-#> $ .path          <fs::path> "C:/Users/Tristan/Documents/GitRepos/filetree/inst…
+#> $ .path          <fs::path> "C:/Users/mahr/Documents/GitRepos/filetree/inst/de…
 #> $ .rel           <fs::path> "ab-01/day01/ab-01_01_green.txt", "ab-01/day01/ab-…
-#> $ at_layer       <chr> "data", "data", "data", "data", "data"
-#> $ layer__subject <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01"
-#> $ layer__time    <chr> "day01", "day01", "day02", "day02", "day03"
-#> $ layer__data    <chr> "ab-01_01_green.txt", "ab-01_01_red.txt", "ab-01_02_gre…
-#> $ subject        <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01"
-#> $ time           <chr> "01", "01", "02", "02", "03"
-#> $ task           <chr> "green", "red", "green", "red", "green"
-#> $ pattern        <chr> "default", "default", "default", "default", "default"
-#> $ .ok            <lgl> TRUE, TRUE, TRUE, TRUE, FALSE
-#> $ .problems      <list> <NULL>, <NULL>, <NULL>, <NULL>, "capture time='02' conf…
+#> $ at_layer       <chr> "data", "data", "data", "data", "data", "data", "data",…
+#> $ layer__subject <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-02", "…
+#> $ layer__time    <chr> "day01", "day01", "day02", "day02", "day03", "day01", "…
+#> $ layer__data    <chr> "ab-01_01_green.txt", "ab-01_01_red.txt", "ab-01_01_gre…
+#> $ subject        <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-02", "…
+#> $ time           <chr> "01", "01", "02", "02", "03", "01", "01", "02", "02", "…
+#> $ task           <chr> "green", "red", "green", "red", "yellow", "green", "red…
+#> $ pattern        <chr> "default", "default", "default", "default", "default_2"…
+#> $ .ok            <lgl> TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE,…
+#> $ .problems      <list> <NULL>, <NULL>, "capture time='01' conflicts with time…
 ```
 
 ## Current impressions
@@ -267,7 +342,7 @@ It would be nice to
 - [ ] check inventory/completeness. (Did you notice a missing “red” file
   in the first tree?)
 
-- [ ] constrain parent folder. (Maybe a “yellow” is given on and only on
+- [x] constrain parent folder. (Maybe a “yellow” is given on and only on
   day 3.) Or is that more of a dplyr-layer move for validation?
 
 - [ ] add validation that we can reconstruct `.rel` from the
