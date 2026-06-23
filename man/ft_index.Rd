@@ -4,13 +4,17 @@
 \alias{ft_index}
 \title{Index files against a filetree specification}
 \usage{
-ft_index(ft, files = ft_list(ft))
+ft_index(ft, files = ft_list(ft), strict = FALSE)
 }
 \arguments{
 \item{ft}{A \code{filetree} object.}
 
 \item{files}{Optional character vector of file paths to check. Defaults to
 all files under \code{ft$root} via \code{\link[=ft_list]{ft_list()}}.}
+
+\item{strict}{Logical. If \code{TRUE}, files at layers without registered file
+patterns are reported as problems. If \code{FALSE}, missing file patterns are
+accepted so partial schemas can be used for exploratory indexing.}
 }
 \value{
 A tibble with layer columns (\verb{layer__<name>}), captured placeholders,

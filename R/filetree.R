@@ -38,7 +38,8 @@ ft_init <- function(root, layers) {
 #' Register regex templates used by patterns
 #'
 #' Add named regular expressions to the pool that can be referenced by
-#' placeholders such as `{subject}` inside directory or file patterns.
+#' placeholders such as `{subject}` inside directory or file patterns. Regexes
+#' can also reference other regexes in the pool with the same placeholder syntax.
 #'
 #' @param ft A `filetree` object.
 #' @param regexes Named character vector of regular expressions to store.
@@ -51,6 +52,7 @@ ft_add_regex <- function(ft, regexes) {
     stopifnot(length(rx) == 1, nzchar(rx))
     ft$regex_pool[[nm]] <- rx
   }
+  .ft_validate_regex_pool(ft$regex_pool)
   ft <- .ft_recompile_patterns(ft)
   ft
 }
@@ -72,7 +74,7 @@ ft_add_regex <- function(ft, regexes) {
 
   compiled <- pattern
   for (nm in ph) {
-    rx <- regex_pool[[nm]]
+    rx <- .ft_expand_pool_regex(nm, regex_pool)
     # Rewrite anchors so nested regexes still respect layer boundaries when
     # embedded into a full path pattern.
     rx <- .ft_rewrite_pool_anchors(rx)
@@ -83,6 +85,45 @@ ft_add_regex <- function(ft, regexes) {
     )
   }
   paste0("^", compiled, "$")
+}
+
+.ft_expand_pool_regex <- function(name, regex_pool, stack = character()) {
+  if (!name %in% names(regex_pool)) {
+    stop("Regex pool entry references unknown regex name: ", name)
+  }
+  if (name %in% stack) {
+    cycle <- c(stack[match(name, stack):length(stack)], name)
+    stop("Cyclic regex reference: ", paste(cycle, collapse = " -> "))
+  }
+
+  rx <- regex_pool[[name]]
+  ph <- .ft_placeholders(rx)
+  missing <- setdiff(ph, names(regex_pool))
+  if (length(missing)) {
+    stop(
+      "Regex pool entry '", name, "' references unknown regex name(s): ",
+      paste(missing, collapse = ", ")
+    )
+  }
+
+  stack <- c(stack, name)
+  for (nm in ph) {
+    nested <- .ft_expand_pool_regex(nm, regex_pool, stack)
+    nested <- .ft_rewrite_pool_anchors(nested)
+    rx <- stringr::str_replace_all(
+      rx,
+      stringr::fixed(paste0("{", nm, "}")),
+      paste0("(?:", nested, ")")
+    )
+  }
+  rx
+}
+
+.ft_validate_regex_pool <- function(regex_pool) {
+  for (nm in names(regex_pool)) {
+    .ft_expand_pool_regex(nm, regex_pool)
+  }
+  invisible(regex_pool)
 }
 
 .ft_rewrite_pool_anchors <- function(rx) {
@@ -236,11 +277,15 @@ ft_list <- function(ft) {
 #' @param ft A `filetree` object.
 #' @param files Optional character vector of file paths to check. Defaults to
 #'   all files under `ft$root` via [ft_list()].
+#' @param strict Logical. If `TRUE`, files at layers without registered file
+#'   patterns are reported as problems. If `FALSE`, missing file patterns are
+#'   accepted so partial schemas can be used for exploratory indexing.
 #' @return A tibble with layer columns (`layer__<name>`), captured placeholders,
 #'   the matched pattern name, `.ok` flag, and `.problems` list-column.
 #' @export
-ft_index <- function(ft, files = ft_list(ft)) {
+ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   stopifnot(inherits(ft, "filetree"))
+  stopifnot(is.logical(strict), length(strict) == 1, !is.na(strict))
 
   rel <- fs::path_rel(files, start = ft$root)
   parts_list <- strsplit(rel, .Platform$file.sep, fixed = TRUE)
@@ -318,7 +363,8 @@ ft_index <- function(ft, files = ft_list(ft)) {
 
     rx <- ft$regex_pool[[cn]]
     if (!is.null(rx)) {
-      bad_rx <- idx & !is.na(tbl[[cn]]) & !stringr::str_detect(tbl[[cn]], paste0("^", rx, "$"))
+      rx <- .ft_expand_pool_regex(cn, ft$regex_pool)
+      bad_rx <- idx & !is.na(tbl[[cn]]) & !stringr::str_detect(tbl[[cn]], paste0("^(?:", rx, ")$"))
       if (any(bad_rx)) {
         for (j in which(bad_rx)) {
           msgs[[j]] <- c(
@@ -391,6 +437,7 @@ ft_index <- function(ft, files = ft_list(ft)) {
     if (!any(layer_rows)) next
 
     if (is.null(spec) || length(spec) == 0L) {
+      if (!strict) next
       for (j in which(layer_rows)) {
         problems[[j]] <- c(
           problems[[j]],

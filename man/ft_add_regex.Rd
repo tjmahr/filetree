@@ -16,5 +16,6 @@ The updated \code{filetree} object.
 }
 \description{
 Add named regular expressions to the pool that can be referenced by
-placeholders such as \code{{subject}} inside directory or file patterns.
+placeholders such as \code{{subject}} inside directory or file patterns. Regexes
+can also reference other regexes in the pool with the same placeholder syntax.
 }
