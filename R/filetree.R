@@ -321,10 +321,10 @@ ft_add_dir_pattern <- function(ft, layer, patterns) {
 #' @param layer Layer at which the files live (must be listed in `ft$layers`).
 #' @param patterns Named character vector of file-name patterns that may use
 #'   `{placeholder}` references tied to `ft`'s regex pool.
-#' @param when Optional named character vector or named list of exact-match conditions. A
-#'   conditional file pattern is applied only when every condition matches an
-#'   extracted field or raw layer value with the same name. Use a list when a
-#'   condition can match any of several values.
+#' @param when Optional named character vector or named list of exact-match
+#'   conditions. A conditional file pattern is applied only when every condition
+#'   matches an extracted field or raw layer value with the same name. Use a
+#'   list when a condition can match any of several values.
 #' @param with Optional named character vector of pattern-local regex
 #'   definitions. These definitions override `ft`'s regex pool for this file
 #'   pattern only.
@@ -338,7 +338,11 @@ ft_add_dir_pattern <- function(ft, layer, patterns) {
 #'     time = "day\\d{2}",
 #'     task = "red|green"
 #'   )) |>
-#'   ft_add_file_pattern("data", c(txt = "{subject}_{task}.txt"), when = list(time = c("day01", "day02"))) |>
+#'   ft_add_file_pattern(
+#'     "data",
+#'     c(txt = "{subject}_{task}.txt"),
+#'     when = list(time = c("day01", "day02"))
+#'   ) |>
 #'   ft_add_file_pattern(
 #'     "data",
 #'     c(wav = "{subject}_{task}.wav"),
@@ -571,7 +575,9 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   problems <- vector("list", n)
 
   # helper: write captures with conflict checking against existing extracted field
-  set_capture_vec <- function(tbl, idx, cn, values, msgs, regex_pool) {
+  set_capture_vec <- function(tbl, idx, cn, values, msgs, regex_pool,
+                              source_label = "extracted value",
+                              existing_label = "earlier path layer") {
     if (!any(idx)) return(list(tbl = tbl, msgs = msgs))
     values <- as.character(unname(values))
     existing <- tbl[[cn]]
@@ -581,7 +587,15 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       for (j in which(conflicts)) {
         msgs[[j]] <- c(
           msgs[[j]],
-          sprintf("capture %s='%s' conflicts with %s='%s'", cn, values[[j]], cn, existing[[j]])
+          sprintf(
+            "%s has {.var %s} {.val %s}, but %s has {.var %s} {.val %s}",
+            source_label,
+            cn,
+            values[[j]],
+            existing_label,
+            cn,
+            existing[[j]]
+          )
         )
       }
     }
@@ -599,7 +613,7 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
         for (j in which(bad_rx)) {
           msgs[[j]] <- c(
             msgs[[j]],
-            sprintf("capture %s='%s' fails /%s/", cn, tbl[[cn]][[j]], rx)
+            sprintf("{.var %s} {.val %s} fails /%s/", cn, tbl[[cn]][[j]], rx)
           )
         }
       }
@@ -618,7 +632,7 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   }
   if (any(bad_root)) {
     for (j in which(bad_root)) {
-      problems[[j]] <- c(problems[[j]], "file is at or above root; no matching at_layer")
+      problems[[j]] <- c(problems[[j]], "file is at or above root; no matching layer")
     }
   }
   active <- !(too_deep | bad_root)
@@ -642,7 +656,15 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       cap_names <- setdiff(colnames(m), "")
       for (cn in cap_names) {
         vals <- m[, cn]
-        res <- set_capture_vec(tbl, ok & !is.na(vals), cn, vals, problems, regex_pool = ft$regex_pool)
+        res <- set_capture_vec(
+          tbl,
+          ok & !is.na(vals),
+          cn,
+          vals,
+          problems,
+          regex_pool = ft$regex_pool,
+          source_label = sprintf("directory %s", layer)
+        )
         tbl <- res$tbl
         problems <- res$msgs
       }
@@ -654,7 +676,7 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       for (j in which(unmatched)) {
         problems[[j]] <- c(
           problems[[j]],
-          sprintf("directory %s='%s' matches no pattern", layer, raw_vals[[j]])
+          sprintf("directory name '%s' does not match a dir pattern at layer `%s`", raw_vals[[j]], layer)
         )
       }
     }
@@ -672,7 +694,7 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       for (j in which(layer_rows)) {
         problems[[j]] <- c(
           problems[[j]],
-          sprintf("no file patterns registered at_layer='%s'", tbl$at_layer[[j]])
+          sprintf("no file patterns registered for `%s` files", tbl$at_layer[[j]])
         )
       }
       next
@@ -698,7 +720,16 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       if (is.null(regex_pool)) regex_pool <- ft$regex_pool
       for (cn in cap_names) {
         vals <- m[, cn]
-        res <- set_capture_vec(tbl, ok & !is.na(vals), cn, vals, problems, regex_pool = regex_pool)
+        res <- set_capture_vec(
+          tbl,
+          ok & !is.na(vals),
+          cn,
+          vals,
+          problems,
+          regex_pool = regex_pool,
+          source_label = "filename",
+          existing_label = "a parent directory"
+        )
         tbl <- res$tbl
         problems <- res$msgs
       }
@@ -711,7 +742,11 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       for (j in which(no_applicable)) {
         problems[[j]] <- c(
           problems[[j]],
-          sprintf("file '%s' matches no applicable pattern at_layer='%s'", fname[[j]], tbl$at_layer[[j]])
+          sprintf(
+            "filename '%s' does not match an applicable file pattern at layer `%s`",
+            fname[[j]],
+            tbl$at_layer[[j]]
+          )
         )
       }
     }
@@ -721,7 +756,7 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       for (j in which(unmatched)) {
         problems[[j]] <- c(
           problems[[j]],
-          sprintf("file '%s' matches no pattern at_layer='%s'", fname[[j]], tbl$at_layer[[j]])
+          sprintf("filename '%s' does not match a file pattern at layer `%s`", fname[[j]], tbl$at_layer[[j]])
         )
       }
     }
@@ -793,7 +828,7 @@ ft_glimpse_problems <- function(x, n = 10, ...) {
       cat("\n")
       cat(as.character(problem_rows$.rel[[i]]), "\n", sep = "")
       for (problem in problem_rows$.problems[[i]]) {
-        cat("- ", problem, "\n", sep = "")
+        cli::cli_bullets(c("*" = problem))
       }
     }
   }
@@ -808,6 +843,136 @@ ft_glimpse_problems <- function(x, n = 10, ...) {
     stop("Index is missing required column(s): ", paste(missing, collapse = ", "), call. = FALSE)
   }
   invisible(index)
+}
+
+#' Format a filetree schema as a tree
+#'
+#' Create a tree-shaped summary of the declared directory and file patterns.
+#'
+#' @param ft A `filetree` object.
+#' @return Character vector containing the schema tree lines.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data")) |>
+#'   ft_add_regex(c(
+#'     subject = "\\w{2}-\\d{2}",
+#'     time = "day\\d{2}",
+#'     task = "red|green"
+#'   )) |>
+#'   ft_add_dir_pattern("subject", "{subject}") |>
+#'   ft_add_dir_pattern("time", "{time}") |>
+#'   ft_add_file_pattern("data", "{subject}_{task}.txt")
+#'
+#' ft_format_schema_tree(ft)
+#' @export
+ft_format_schema_tree <- function(ft) {
+  stopifnot(inherits(ft, "filetree"))
+
+  layers <- ft$layers
+  dir_layers <- if (length(layers) >= 2) layers[-length(layers)] else character()
+  file_layer <- layers[[length(layers)]]
+
+  lines <- as.character(ft$root)
+  prefix <- ""
+
+  for (i in seq_along(dir_layers)) {
+    layer <- dir_layers[[i]]
+    last_dir <- i == length(dir_layers)
+    branch <- "\u2514\u2500\u2500 "
+    lines <- c(lines, paste0(prefix, branch, .ft_format_dir_schema(ft, layer)))
+    prefix <- paste0(prefix, "    ")
+  }
+
+  file_lines <- .ft_format_file_schema(ft, file_layer)
+  if (length(file_lines)) {
+    for (i in seq_along(file_lines)) {
+      branch <- if (i == length(file_lines)) {
+        "\u2514\u2500\u2500 "
+      } else {
+        "\u251c\u2500\u2500 "
+      }
+      lines <- c(lines, paste0(prefix, branch, file_lines[[i]]))
+    }
+  }
+
+  lines
+}
+
+#' Print a filetree schema tree
+#'
+#' Print the result of [ft_format_schema_tree()] and invisibly return the input
+#' `filetree`.
+#'
+#' @param ft A `filetree` object.
+#' @return The input `filetree`, invisibly.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#' ft <- ft_init(root, c("subject", "time", "data"))
+#'
+#' ft_schema_tree(ft)
+#' @export
+ft_schema_tree <- function(ft) {
+  cat(ft_format_schema_tree(ft), sep = "\n")
+  cat("\n")
+  invisible(ft)
+}
+
+.ft_has_file_patterns <- function(ft, layer) {
+  spec <- ft$file_patterns[[layer]]
+  !(is.null(spec) || length(spec) == 0)
+}
+
+.ft_format_dir_schema <- function(ft, layer) {
+  spec <- ft$dir_patterns[[layer]]
+  if (is.null(spec) || length(spec) == 0) {
+    return(paste0(layer, ": <none>"))
+  }
+  paste0(layer, ": ", paste(unname(spec$raw), collapse = " | "))
+}
+
+.ft_format_file_schema <- function(ft, layer) {
+  spec <- ft$file_patterns[[layer]]
+  if (is.null(spec) || length(spec) == 0) {
+    return(character())
+  }
+
+  out <- character(length(spec$raw))
+  for (i in seq_along(spec$raw)) {
+    nm <- names(spec$raw)[[i]]
+    label <- if (identical(nm, "default") && length(spec$raw) == 1) {
+      paste0(layer, ": ", unname(spec$raw[[i]]))
+    } else {
+      paste0(layer, ": ", nm, " = ", unname(spec$raw[[i]]))
+    }
+    annotations <- c(
+      .ft_format_when_annotation(spec$when[[i]]),
+      .ft_format_with_annotation(spec$with[[i]])
+    )
+    annotations <- annotations[nzchar(annotations)]
+    if (length(annotations)) {
+      label <- paste0(label, " [", paste(annotations, collapse = "; "), "]")
+    }
+    out[[i]] <- label
+  }
+  out
+}
+
+.ft_format_when_annotation <- function(when) {
+  if (is.null(when) || length(when) == 0) return("")
+  pieces <- character(length(when))
+  for (i in seq_along(when)) {
+    values <- unname(when[[i]])
+    op <- if (length(values) == 1) " == " else " in "
+    pieces[[i]] <- paste0(names(when)[[i]], op, paste(values, collapse = ", "))
+  }
+  paste("when", paste(pieces, collapse = " and "))
+}
+
+.ft_format_with_annotation <- function(with) {
+  if (is.null(with) || length(with) == 0) return("")
+  pieces <- paste0(names(with), " = ", unname(with))
+  paste("with", paste(pieces, collapse = ", "))
 }
 
 # ---- nice format + print ----

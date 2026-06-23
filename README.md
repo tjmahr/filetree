@@ -268,7 +268,7 @@ ft <- "./inst/demo-3" |>
   ) |> 
   ft_add_file_pattern(
     "data", 
-    "{subject}_{time}_{task}.txt",
+    c(day03 = "{subject}_{time}_{task}.txt"),
     # limit when this pattern is used
     when = c(time = "03"),
     # temporarily overwrite the pattern too
@@ -293,6 +293,17 @@ ft |>
 #> - file 'ab-02_03_green.txt' matches no pattern at_layer='data'
 ```
 
+When the ft is complex, we can print out a tree-like version:
+
+``` r
+ft_schema_tree(ft)
+#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-3
+#> |-- subject: {subject}
+#> |   |-- time: day{time}
+#> |   |   |-- data: default = {subject}_{time}_{task}.txt [when time in 01, 02]
+#> |   |   `-- data: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]
+```
+
 Because the parsed out layers and fields need to kept separate from each
 other, we get a lot of columns now:
 
@@ -311,7 +322,7 @@ ft |>
 #> $ subject        <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-02", "…
 #> $ time           <chr> "01", "01", "02", "02", "03", "01", "01", "02", "02", "…
 #> $ task           <chr> "green", "red", "green", "red", "yellow", "green", "red…
-#> $ pattern        <chr> "default", "default", "default", "default", "default_2"…
+#> $ pattern        <chr> "default", "default", "default", "default", "day03", "d…
 #> $ .ok            <lgl> TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE,…
 #> $ .problems      <list> <NULL>, <NULL>, "capture time='01' conflicts with time…
 ```
@@ -348,4 +359,4 @@ It would be nice to
 - [ ] add validation that we can reconstruct `.rel` from the
   concatenation of each layer?
 
-- [ ] having a really good and fast way to see the problem files
+- [x] having a really good and fast way to see the problem files

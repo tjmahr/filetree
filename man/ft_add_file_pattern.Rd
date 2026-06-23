@@ -14,10 +14,10 @@ ft_add_file_pattern(ft, layer, patterns, when = NULL, with = NULL)
 \item{patterns}{Named character vector of file-name patterns that may use
 \code{{placeholder}} references tied to \code{ft}'s regex pool.}
 
-\item{when}{Optional named character vector or named list of exact-match conditions. A
-conditional file pattern is applied only when every condition matches an
-extracted field or raw layer value with the same name. Use a list when a
-condition can match any of several values.}
+\item{when}{Optional named character vector or named list of exact-match
+conditions. A conditional file pattern is applied only when every condition
+matches an extracted field or raw layer value with the same name. Use a
+list when a condition can match any of several values.}
 
 \item{with}{Optional named character vector of pattern-local regex
 definitions. These definitions override \code{ft}'s regex pool for this file
@@ -39,7 +39,11 @@ ft <- ft_init(root, c("subject", "time", "data")) |>
     time = "day\\\\d{2}",
     task = "red|green"
   )) |>
-  ft_add_file_pattern("data", c(txt = "{subject}_{task}.txt"), when = list(time = c("day01", "day02"))) |>
+  ft_add_file_pattern(
+    "data",
+    c(txt = "{subject}_{task}.txt"),
+    when = list(time = c("day01", "day02"))
+  ) |>
   ft_add_file_pattern(
     "data",
     c(wav = "{subject}_{task}.wav"),

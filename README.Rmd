@@ -89,6 +89,13 @@ ft <- ft |>
 ft
 ```
 
+We can also view the filetree schema as a tree:
+
+```{r}
+ft |> ft_schema_tree()
+```
+
+
 Now we can validate and parse the file names.
 
 ```{r}
@@ -213,13 +220,25 @@ ft <- "./inst/demo-3" |>
   ) |> 
   ft_add_file_pattern(
     "data", 
-    "{subject}_{time}_{task}.txt",
+    c(day03 = "{subject}_{time}_{task}.txt"),
     # limit when this pattern is used
     when = c(time = "03"),
     # temporarily overwrite the pattern too
     with = c(task = "yellow")
   )
 
+```
+
+
+In the tree view, we can see multiple file patterns in the `data` layer:
+
+```{r}
+ft_schema_tree(ft)
+```
+
+We should find our four problems:
+
+```{r}
 ft |> 
   ft_index() |> 
   ft_glimpse_problems()
@@ -268,5 +287,5 @@ It would be nice to
 - [ ] add validation that we can reconstruct `.rel` from the concatenation of 
   each layer?
   
-- [ ] having a really good and fast way to see the problem files
+- [x] having a really good and fast way to see the problem files
 

@@ -215,7 +215,7 @@ test_that("Missing file patterns are okay by default and problems in strict mode
   expect_true(all(
     vapply(
       index_strict$.problems,
-      function(x) any(grepl("no file patterns registered at_layer='data'", x, fixed = TRUE)),
+      function(x) any(grepl("no file patterns registered for `data` files", x, fixed = TRUE)),
       logical(1)
     )
   ))
@@ -348,7 +348,7 @@ test_that("Conditional file patterns do not apply outside their conditions", {
 
   expect_true(index$.ok[[1]])
   expect_false(index$.ok[[2]])
-  expect_true(any(grepl("matches no applicable pattern", index$.problems[[2]], fixed = TRUE)))
+  expect_true(any(grepl("does not match an applicable file pattern at layer `data`", index$.problems[[2]], fixed = TRUE)))
 })
 
 test_that("Placeholder names with underscores are extracted from patterns", {
@@ -423,7 +423,7 @@ test_that("Conditional file patterns can match any of several parent values", {
 
   expect_equal(index$.ok, c(TRUE, TRUE, TRUE, FALSE))
   expect_equal(index$pattern, c("main", "main", "day03", NA))
-  expect_true(any(grepl("matches no pattern", index$.problems[[4]], fixed = TRUE)))
+  expect_true(any(grepl("does not match a file pattern at layer `data`", index$.problems[[4]], fixed = TRUE)))
 })
 
 test_that("File patterns can use pattern-local regex definitions", {
@@ -500,6 +500,95 @@ test_that("Pattern-local regex definitions survive global regex updates", {
   expect_equal(index$task, c("yellow", NA))
 })
 
+test_that("File pattern problems use user-facing layer names", {
+  root <- fs::path_temp("filetree-file-pattern-messages")
+  ft_messages <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_dir_pattern("time", "day{time}") |>
+    ft_add_file_pattern("data", "{subject}_{time}_{task}.txt")
+
+  index <- ft_index(
+    ft_messages,
+    fs::path(root, "ab-01/day02/ab-01_02_yellow.txt")
+  )
+
+  expect_equal(
+    index$.problems[[1]],
+    "filename 'ab-01_02_yellow.txt' does not match a file pattern at layer `data`"
+  )
+})
+
+test_that("File capture conflicts describe filename and parent directory values", {
+  root <- fs::path_temp("filetree-conflict-messages")
+  ft_messages <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_dir_pattern("time", "day{time}") |>
+    ft_add_file_pattern("data", "{subject}_{time}_{task}.txt")
+
+  index <- ft_index(
+    ft_messages,
+    fs::path(root, "ab-01/day02/ab-01_01_red.txt")
+  )
+
+  expect_equal(
+    index$.problems[[1]],
+    "filename has {.var time} {.val 01}, but a parent directory has {.var time} {.val 02}"
+  )
+})
+
+test_that("Problem glimpses render problems with cli bullets", {
+  index <- tibble::tibble(
+    .rel = "a.txt",
+    .ok = FALSE,
+    .problems = list("filename has {.var time} {.val 01}")
+  )
+
+  out <- utils::capture.output(
+    msg <- utils::capture.output(
+      result <- ft_glimpse_problems(index, n = 1),
+      type = "message"
+    )
+  )
+
+  expect_s3_class(result, "tbl_df")
+  expect_true(any(grepl("* filename has", msg, fixed = TRUE)))
+  expect_false(any(grepl("- filename has", msg, fixed = TRUE)))
+  expect_true(any(grepl("1/1 files with 1 problems.", out, fixed = TRUE)))
+})
+
+test_that("Directory pattern problems use cli formatting and layer context", {
+  root <- fs::path_temp("filetree-dir-pattern-messages")
+  ft_messages <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_dir_pattern("time", "day{time}") |>
+    ft_add_file_pattern("data", "{subject}_{task}.txt")
+
+  index <- ft_index(
+    ft_messages,
+    fs::path(root, "ab-01/day3/ab-01_red.txt")
+  )
+
+  expect_equal(
+    index$.problems[[1]][[1]],
+    "directory name 'day3' does not match a dir pattern at layer `time`"
+  )
+})
+
 test_that("Problem glimpses print a compact summary from an index", {
   index <- tibble::tibble(
     .rel = c("a.txt", "b.txt", "c.txt"),
@@ -511,14 +600,19 @@ test_that("Problem glimpses print a compact summary from an index", {
     )
   )
 
-  out <- utils::capture.output(result <- ft_glimpse_problems(index, n = 1))
+  out <- utils::capture.output(
+    msg <- utils::capture.output(
+      result <- ft_glimpse_problems(index, n = 1),
+      type = "message"
+    )
+  )
 
   expect_s3_class(result, "tbl_df")
   expect_equal(result$.rel, c("a.txt", "b.txt"))
   expect_true(any(grepl("2/3 files with 3 problems.", out, fixed = TRUE)))
   expect_true(any(grepl("Showing 1 of 2 problem files.", out, fixed = TRUE)))
   expect_true(any(grepl("a.txt", out, fixed = TRUE)))
-  expect_true(any(grepl("- first problem", out, fixed = TRUE)))
+  expect_true(any(grepl("* first problem", msg, fixed = TRUE)))
   expect_false(any(grepl("b.txt", out, fixed = TRUE)))
 })
 
@@ -533,10 +627,76 @@ test_that("Problem glimpses can index a filetree", {
     ft_add_dir_pattern("time", "day{time}") |>
     ft_add_file_pattern("data", "{subject}_{time}_{task}.txt")
 
-  out <- utils::capture.output(result <- ft_glimpse_problems(ft_problem, n = 2))
+  out <- utils::capture.output(
+    msg <- utils::capture.output(
+      result <- ft_glimpse_problems(ft_problem, n = 2),
+      type = "message"
+    )
+  )
 
   expect_s3_class(result, "tbl_df")
   expect_true(nrow(result) > 0)
   expect_true(any(grepl("files with", out, fixed = TRUE)))
-  expect_true(any(grepl("-", out, fixed = TRUE)))
+  expect_true(any(grepl("*", msg, fixed = TRUE)))
+})
+
+test_that("Schema trees format layers and conditional file patterns", {
+  ft_schema <- ft_init("demo-root", c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_dir_pattern("time", "day{time}") |>
+    ft_add_file_pattern(
+      "data",
+      "{subject}_{time}_{task}.txt",
+      when = list(time = c("01", "02"))
+    ) |>
+    ft_add_file_pattern(
+      "data",
+      c(day03 = "{subject}_{time}_{task}.txt"),
+      when = c(time = "03"),
+      with = c(task = "yellow")
+    )
+
+  lines <- ft_format_schema_tree(ft_schema)
+
+  expect_equal(lines[[1]], as.character(ft_schema$root))
+  expect_true(any(grepl("subject: {subject}", lines, fixed = TRUE)))
+  expect_true(any(grepl("time: day{time}", lines, fixed = TRUE)))
+  expect_true(any(grepl("default = {subject}_{time}_{task}.txt [when time in 01, 02]", lines, fixed = TRUE)))
+  expect_true(any(grepl("day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]", lines, fixed = TRUE)))
+})
+
+test_that("Schema trees hide default pattern names only for singleton layers", {
+  ft_single <- ft_init("demo-root", c("subject", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}", task = "red|green")) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_file_pattern("data", "{subject}_{task}.txt")
+
+  single_lines <- ft_format_schema_tree(ft_single)
+
+  expect_true(any(grepl("data: {subject}_{task}.txt", single_lines, fixed = TRUE)))
+  expect_false(any(grepl("default = {subject}_{task}.txt", single_lines, fixed = TRUE)))
+
+  ft_multi <- ft_single |>
+    ft_add_file_pattern("data", c(yellow = "{subject}_yellow.txt"))
+
+  multi_lines <- ft_format_schema_tree(ft_multi)
+
+  expect_true(any(grepl("data: default = {subject}_{task}.txt", multi_lines, fixed = TRUE)))
+  expect_true(any(grepl("data: yellow = {subject}_yellow.txt", multi_lines, fixed = TRUE)))
+})
+
+test_that("Schema trees print and return the filetree invisibly", {
+  ft_schema <- ft_init("demo-root", c("subject", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}")) |>
+    ft_add_dir_pattern("subject", "{subject}")
+
+  out <- utils::capture.output(result <- ft_schema_tree(ft_schema))
+
+  expect_identical(result, ft_schema)
+  expect_true(any(grepl("subject: {subject}", out, fixed = TRUE)))
 })
