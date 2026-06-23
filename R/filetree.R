@@ -17,6 +17,14 @@
 #' @param layers Character vector naming each path layer; the last element
 #'   represents the file-name layer.
 #' @return A `filetree` object describing the tree layout.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(
+#'   root = root,
+#'   layers = c("subject", "time", "data")
+#' )
+#' ft
 #' @export
 ft_init <- function(root, layers) {
   stopifnot(is.character(layers), length(layers) >= 1, all(nzchar(layers)))
@@ -44,6 +52,20 @@ ft_init <- function(root, layers) {
 #' @param ft A `filetree` object.
 #' @param regexes Named character vector of regular expressions to store.
 #' @return The updated `filetree` object.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data")) |>
+#'   ft_add_regex(c(
+#'     wtocs = "wT\\d\\d",
+#'     stocs = "s\\dT[01]\\d",
+#'     tocs = "{wtocs}|{stocs}",
+#'     subject = "\\w{2}-\\d{2}",
+#'     time = "day\\d{2}",
+#'     task = "red|green"
+#'   ))
+#'
+#' names(ft$regex_pool)
 #' @export
 ft_add_regex <- function(ft, regexes) {
   stopifnot(inherits(ft, "filetree"), is.character(regexes), !is.null(names(regexes)))
@@ -174,6 +196,18 @@ ft_add_regex <- function(ft, regexes) {
 #' @param patterns Named character vector of patterns using `{placeholder}`
 #'   references that point into `ft`'s `regex_pool`.
 #' @return The updated `filetree` object.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data")) |>
+#'   ft_add_regex(c(
+#'     subject = "\\w{2}-\\d{2}",
+#'     time = "day\\d{2}"
+#'   )) |>
+#'   ft_add_dir_pattern("subject", "{subject}") |>
+#'   ft_add_dir_pattern("time", "{time}")
+#'
+#' ft
 #' @export
 ft_add_dir_pattern <- function(ft, layer, patterns) {
   stopifnot(inherits(ft, "filetree"))
@@ -199,6 +233,17 @@ ft_add_dir_pattern <- function(ft, layer, patterns) {
 #' @param patterns Named character vector of file-name patterns that may use
 #'   `{placeholder}` references tied to `ft`'s regex pool.
 #' @return The updated `filetree` object.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data")) |>
+#'   ft_add_regex(c(
+#'     subject = "\\w{2}-\\d{2}",
+#'     task = "red|green"
+#'   )) |>
+#'   ft_add_file_pattern("data", "{subject}_{task}.txt")
+#'
+#' ft
 #' @export
 ft_add_file_pattern <- function(ft, layer, patterns) {
   stopifnot(inherits(ft, "filetree"))
@@ -221,6 +266,12 @@ ft_add_file_pattern <- function(ft, layer, patterns) {
 #'
 #' @param ft A `filetree` object.
 #' @return Character vector of file paths relative to the working directory.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data"))
+#'
+#' head(ft_list(ft))
 #' @export
 ft_list <- function(ft) {
   stopifnot(inherits(ft, "filetree"))
@@ -238,6 +289,11 @@ ft_list <- function(ft) {
 #' @return The layer name, `".__too_deep__"` if the path exceeds known layers,
 #'   or `NA_character_` when the path cannot be matched.
 #' @keywords internal
+#' @examples
+#' ft <- ft_init(tempdir(), c("subject", "time", "data"))
+#'
+#' .ft_at_layer_from_parts(ft, c("ab-01", "day01", "ab-01_red.txt"))
+#' .ft_at_layer_from_parts(ft, c("ab-01", "day01", "extra", "file.txt"))
 #' @export
 .ft_at_layer_from_parts <- function(ft, parts) {
   # parts includes filename at end
@@ -282,6 +338,31 @@ ft_list <- function(ft) {
 #'   accepted so partial schemas can be used for exploratory indexing.
 #' @return A tibble with layer columns (`layer__<name>`), captured placeholders,
 #'   the matched pattern name, `.ok` flag, and `.problems` list-column.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data")) |>
+#'   ft_add_regex(c(
+#'     subject = "\\w{2}-\\d{2}",
+#'     time = "day\\d{2}",
+#'     task = "red|green"
+#'   )) |>
+#'   ft_add_dir_pattern("subject", "{subject}") |>
+#'   ft_add_dir_pattern("time", "{time}") |>
+#'   ft_add_file_pattern("data", "{subject}_{task}.txt")
+#'
+#' ft_index(ft)
+#'
+#' ft_partial <- ft_init(root, c("subject", "time", "data")) |>
+#'   ft_add_regex(c(
+#'     subject = "\\w{2}-\\d{2}",
+#'     time = "day\\d{2}"
+#'   )) |>
+#'   ft_add_dir_pattern("subject", "{subject}") |>
+#'   ft_add_dir_pattern("time", "{time}")
+#'
+#' ft_index(ft_partial)
+#' ft_index(ft_partial, strict = TRUE)
 #' @export
 ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   stopifnot(inherits(ft, "filetree"))
@@ -500,6 +581,12 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
 #' @param ... Unused, included for method signature compatibility.
 #' @param width Optional output width forwarded to formatting helpers.
 #' @return Character vector with the formatted summary.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data"))
+#'
+#' cat(format(ft))
 #' @export
 format.filetree <- function(x, ..., width = getOption("width")) {
   stopifnot(inherits(x, "filetree"))
@@ -579,6 +666,12 @@ format.filetree <- function(x, ..., width = getOption("width")) {
 #' @param ... Unused, included for method signature compatibility.
 #' @param width Optional output width forwarded to [format.filetree()].
 #' @return The input `filetree` object, invisibly.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data"))
+#'
+#' print(ft)
 #' @export
 print.filetree <- function(x, ..., width = getOption("width")) {
   cat(format(x, ..., width = width), "\n")

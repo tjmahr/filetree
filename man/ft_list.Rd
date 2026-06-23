@@ -15,3 +15,10 @@ Character vector of file paths relative to the working directory.
 \description{
 Return all files under the filetree root using the configured \code{fs} helper.
 }
+\examples{
+root <- system.file("demo-1", package = "filetree")
+
+ft <- ft_init(root, c("subject", "time", "data"))
+
+head(ft_list(ft))
+}

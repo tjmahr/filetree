@@ -19,3 +19,18 @@ Add named regular expressions to the pool that can be referenced by
 placeholders such as \code{{subject}} inside directory or file patterns. Regexes
 can also reference other regexes in the pool with the same placeholder syntax.
 }
+\examples{
+root <- system.file("demo-1", package = "filetree")
+
+ft <- ft_init(root, c("subject", "time", "data")) |>
+  ft_add_regex(c(
+    wtocs = "wT\\\\d\\\\d",
+    stocs = "s\\\\dT[01]\\\\d",
+    tocs = "{wtocs}|{stocs}",
+    subject = "\\\\w{2}-\\\\d{2}",
+    time = "day\\\\d{2}",
+    task = "red|green"
+  ))
+
+names(ft$regex_pool)
+}

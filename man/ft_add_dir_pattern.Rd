@@ -21,3 +21,16 @@ The updated \code{filetree} object.
 Compile named patterns that validate and extract captures from directory
 names at a given layer in the tree.
 }
+\examples{
+root <- system.file("demo-1", package = "filetree")
+
+ft <- ft_init(root, c("subject", "time", "data")) |>
+  ft_add_regex(c(
+    subject = "\\\\w{2}-\\\\d{2}",
+    time = "day\\\\d{2}"
+  )) |>
+  ft_add_dir_pattern("subject", "{subject}") |>
+  ft_add_dir_pattern("time", "{time}")
+
+ft
+}

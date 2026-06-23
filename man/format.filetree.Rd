@@ -20,3 +20,10 @@ Character vector with the formatted summary.
 Create a human-readable summary of the filetree configuration, including
 layers, regex pool size, and registered patterns.
 }
+\examples{
+root <- system.file("demo-1", package = "filetree")
+
+ft <- ft_init(root, c("subject", "time", "data"))
+
+cat(format(ft))
+}

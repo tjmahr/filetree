@@ -8,6 +8,11 @@
 \description{
 Provides a 'filetree' object for declaring the expected structure of a file hierarchy. A file listing can be parsed and validated against the declared file tree to extract metadata and identify structural and naming inconsistencies.
 }
+\examples{
+root <- system.file("demo-1", package = "filetree")
+ft <- ft_init(root, c("subject", "time", "data"))
+ft
+}
 \seealso{
 Useful links:
 \itemize{

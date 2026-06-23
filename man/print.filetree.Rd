@@ -19,3 +19,10 @@ The input \code{filetree} object, invisibly.
 \description{
 Print the formatted summary of a \code{filetree} object to the console.
 }
+\examples{
+root <- system.file("demo-1", package = "filetree")
+
+ft <- ft_init(root, c("subject", "time", "data"))
+
+print(ft)
+}

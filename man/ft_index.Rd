@@ -24,3 +24,29 @@ the matched pattern name, \code{.ok} flag, and \code{.problems} list-column.
 Validate file paths against the configured directory and file-name patterns,
 extract placeholder captures, and report any problems.
 }
+\examples{
+root <- system.file("demo-1", package = "filetree")
+
+ft <- ft_init(root, c("subject", "time", "data")) |>
+  ft_add_regex(c(
+    subject = "\\\\w{2}-\\\\d{2}",
+    time = "day\\\\d{2}",
+    task = "red|green"
+  )) |>
+  ft_add_dir_pattern("subject", "{subject}") |>
+  ft_add_dir_pattern("time", "{time}") |>
+  ft_add_file_pattern("data", "{subject}_{task}.txt")
+
+ft_index(ft)
+
+ft_partial <- ft_init(root, c("subject", "time", "data")) |>
+  ft_add_regex(c(
+    subject = "\\\\w{2}-\\\\d{2}",
+    time = "day\\\\d{2}"
+  )) |>
+  ft_add_dir_pattern("subject", "{subject}") |>
+  ft_add_dir_pattern("time", "{time}")
+
+ft_index(ft_partial)
+ft_index(ft_partial, strict = TRUE)
+}

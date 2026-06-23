@@ -19,3 +19,12 @@ A \code{filetree} object describing the tree layout.
 Build a \code{filetree} object that records the root directory, ordered layers,
 and slots for regex templates and patterns.
 }
+\examples{
+root <- system.file("demo-1", package = "filetree")
+
+ft <- ft_init(
+  root = root,
+  layers = c("subject", "time", "data")
+)
+ft
+}

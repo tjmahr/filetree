@@ -18,4 +18,10 @@ or \code{NA_character_} when the path cannot be matched.
 \description{
 Determine which configured layer a path belongs to given its components.
 }
+\examples{
+ft <- ft_init(tempdir(), c("subject", "time", "data"))
+
+.ft_at_layer_from_parts(ft, c("ab-01", "day01", "ab-01_red.txt"))
+.ft_at_layer_from_parts(ft, c("ab-01", "day01", "extra", "file.txt"))
+}
 \keyword{internal}
