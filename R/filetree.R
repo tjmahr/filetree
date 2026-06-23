@@ -810,6 +810,132 @@ ft_glimpse_problems <- function(x, n = 10, ...) {
   invisible(index)
 }
 
+#' Format a filetree schema as a tree
+#'
+#' Create a tree-shaped summary of the declared directory and file patterns.
+#'
+#' @param ft A `filetree` object.
+#' @return Character vector containing the schema tree lines.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data")) |>
+#'   ft_add_regex(c(
+#'     subject = "\\w{2}-\\d{2}",
+#'     time = "day\\d{2}",
+#'     task = "red|green"
+#'   )) |>
+#'   ft_add_dir_pattern("subject", "{subject}") |>
+#'   ft_add_dir_pattern("time", "{time}") |>
+#'   ft_add_file_pattern("data", "{subject}_{task}.txt")
+#'
+#' ft_format_schema_tree(ft)
+#' @export
+ft_format_schema_tree <- function(ft) {
+  stopifnot(inherits(ft, "filetree"))
+
+  layers <- ft$layers
+  dir_layers <- if (length(layers) >= 2) layers[-length(layers)] else character()
+  file_layer <- layers[[length(layers)]]
+
+  lines <- as.character(ft$root)
+  prefix <- ""
+
+  for (i in seq_along(dir_layers)) {
+    layer <- dir_layers[[i]]
+    last_dir <- i == length(dir_layers)
+    branch <- if (last_dir && !.ft_has_file_patterns(ft, file_layer)) "`-- " else "|-- "
+    lines <- c(lines, paste0(prefix, branch, .ft_format_dir_schema(ft, layer)))
+    prefix <- paste0(prefix, if (last_dir && !.ft_has_file_patterns(ft, file_layer)) "    " else "|   ")
+  }
+
+  file_lines <- .ft_format_file_schema(ft, file_layer)
+  if (length(file_lines)) {
+    for (i in seq_along(file_lines)) {
+      branch <- if (i == length(file_lines)) "`-- " else "|-- "
+      lines <- c(lines, paste0(prefix, branch, file_lines[[i]]))
+    }
+  }
+
+  lines
+}
+
+#' Print a filetree schema tree
+#'
+#' Print the result of [ft_format_schema_tree()] and invisibly return the input
+#' `filetree`.
+#'
+#' @param ft A `filetree` object.
+#' @return The input `filetree`, invisibly.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#' ft <- ft_init(root, c("subject", "time", "data"))
+#'
+#' ft_schema_tree(ft)
+#' @export
+ft_schema_tree <- function(ft) {
+  cat(ft_format_schema_tree(ft), sep = "\n")
+  cat("\n")
+  invisible(ft)
+}
+
+.ft_has_file_patterns <- function(ft, layer) {
+  spec <- ft$file_patterns[[layer]]
+  !(is.null(spec) || length(spec) == 0)
+}
+
+.ft_format_dir_schema <- function(ft, layer) {
+  spec <- ft$dir_patterns[[layer]]
+  if (is.null(spec) || length(spec) == 0) {
+    return(paste0(layer, ": <none>"))
+  }
+  paste0(layer, ": ", paste(unname(spec$raw), collapse = " | "))
+}
+
+.ft_format_file_schema <- function(ft, layer) {
+  spec <- ft$file_patterns[[layer]]
+  if (is.null(spec) || length(spec) == 0) {
+    return(character())
+  }
+
+  out <- character(length(spec$raw))
+  for (i in seq_along(spec$raw)) {
+    nm <- names(spec$raw)[[i]]
+    label <- if (identical(nm, "default") && length(spec$raw) == 1) {
+      paste0(layer, ": ", unname(spec$raw[[i]]))
+    } else {
+      paste0(layer, ": ", nm, " = ", unname(spec$raw[[i]]))
+    }
+    annotations <- c(
+      .ft_format_when_annotation(spec$when[[i]]),
+      .ft_format_with_annotation(spec$with[[i]])
+    )
+    annotations <- annotations[nzchar(annotations)]
+    if (length(annotations)) {
+      label <- paste0(label, " [", paste(annotations, collapse = "; "), "]")
+    }
+    out[[i]] <- label
+  }
+  out
+}
+
+.ft_format_when_annotation <- function(when) {
+  if (is.null(when) || length(when) == 0) return("")
+  pieces <- character(length(when))
+  for (i in seq_along(when)) {
+    values <- unname(when[[i]])
+    op <- if (length(values) == 1) " == " else " in "
+    pieces[[i]] <- paste0(names(when)[[i]], op, paste(values, collapse = ", "))
+  }
+  paste("when", paste(pieces, collapse = " and "))
+}
+
+.ft_format_with_annotation <- function(with) {
+  if (is.null(with) || length(with) == 0) return("")
+  pieces <- paste0(names(with), " = ", unname(with))
+  paste("with", paste(pieces, collapse = ", "))
+}
+
 # ---- nice format + print ----
 
 #' Format a filetree summary

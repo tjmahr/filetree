@@ -540,3 +540,64 @@ test_that("Problem glimpses can index a filetree", {
   expect_true(any(grepl("files with", out, fixed = TRUE)))
   expect_true(any(grepl("-", out, fixed = TRUE)))
 })
+
+test_that("Schema trees format layers and conditional file patterns", {
+  ft_schema <- ft_init("demo-root", c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_dir_pattern("time", "day{time}") |>
+    ft_add_file_pattern(
+      "data",
+      "{subject}_{time}_{task}.txt",
+      when = list(time = c("01", "02"))
+    ) |>
+    ft_add_file_pattern(
+      "data",
+      c(day03 = "{subject}_{time}_{task}.txt"),
+      when = c(time = "03"),
+      with = c(task = "yellow")
+    )
+
+  lines <- ft_format_schema_tree(ft_schema)
+
+  expect_equal(lines[[1]], as.character(ft_schema$root))
+  expect_true(any(grepl("subject: {subject}", lines, fixed = TRUE)))
+  expect_true(any(grepl("time: day{time}", lines, fixed = TRUE)))
+  expect_true(any(grepl("default = {subject}_{time}_{task}.txt [when time in 01, 02]", lines, fixed = TRUE)))
+  expect_true(any(grepl("day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]", lines, fixed = TRUE)))
+})
+
+test_that("Schema trees hide default pattern names only for singleton layers", {
+  ft_single <- ft_init("demo-root", c("subject", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}", task = "red|green")) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_file_pattern("data", "{subject}_{task}.txt")
+
+  single_lines <- ft_format_schema_tree(ft_single)
+
+  expect_true(any(grepl("data: {subject}_{task}.txt", single_lines, fixed = TRUE)))
+  expect_false(any(grepl("default = {subject}_{task}.txt", single_lines, fixed = TRUE)))
+
+  ft_multi <- ft_single |>
+    ft_add_file_pattern("data", c(yellow = "{subject}_yellow.txt"))
+
+  multi_lines <- ft_format_schema_tree(ft_multi)
+
+  expect_true(any(grepl("data: default = {subject}_{task}.txt", multi_lines, fixed = TRUE)))
+  expect_true(any(grepl("data: yellow = {subject}_yellow.txt", multi_lines, fixed = TRUE)))
+})
+
+test_that("Schema trees print and return the filetree invisibly", {
+  ft_schema <- ft_init("demo-root", c("subject", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}")) |>
+    ft_add_dir_pattern("subject", "{subject}")
+
+  out <- utils::capture.output(result <- ft_schema_tree(ft_schema))
+
+  expect_identical(result, ft_schema)
+  expect_true(any(grepl("subject: {subject}", out, fixed = TRUE)))
+})
