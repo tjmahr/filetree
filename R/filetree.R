@@ -878,7 +878,6 @@ ft_format_schema_tree <- function(ft) {
 
   for (i in seq_along(dir_layers)) {
     layer <- dir_layers[[i]]
-    last_dir <- i == length(dir_layers)
     branch <- "\u2514\u2500\u2500 "
     lines <- c(lines, paste0(prefix, branch, .ft_format_dir_schema(ft, layer)))
     prefix <- paste0(prefix, "    ")

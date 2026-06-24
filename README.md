@@ -115,6 +115,16 @@ ft
 #>     - at_layer=data: default="{subject}_{task}.txt"
 ```
 
+We can also view the filetree schema as a tree:
+
+``` r
+ft |> ft_schema_tree()
+#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
+#> └── subject: {subject}
+#>     └── time: {time}
+#>         └── data: {subject}_{task}.txt
+```
+
 Now we can validate and parse the file names.
 
 ``` r
@@ -195,16 +205,16 @@ ft |>
 #> 4/11 files with 4 problems.
 #> 
 #> ab-01/day01/ab-01_blue.txt
-#> - file 'ab-01_blue.txt' matches no pattern at_layer='data'
+#> • filename 'ab-01_blue.txt' does not match a file pattern at layer `data`
 #> 
 #> ab-01/day02/ac-01_red.txt
-#> - capture subject='ac-01' conflicts with subject='ab-01'
+#> • filename has `subject` "ac-01", but a parent directory has `subject` "ab-01"
 #> 
 #> ac-02/day3/ac-02_green.txt
-#> - directory time='day3' matches no pattern
+#> • directory name 'day3' does not match a dir pattern at layer `time`
 #> 
 #> ac-02/day3/ac-02_red.txt
-#> - directory time='day3' matches no pattern
+#> • directory name 'day3' does not match a dir pattern at layer `time`
 ```
 
 ### Pattern consistency and conditional patterns
@@ -274,23 +284,38 @@ ft <- "./inst/demo-3" |>
     # temporarily overwrite the pattern too
     with = c(task = "yellow")
   )
+```
 
+In the tree view, we can see multiple file patterns in the `data` layer:
+
+``` r
+ft_schema_tree(ft)
+#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-3
+#> └── subject: {subject}
+#>     └── time: day{time}
+#>         ├── data: default = {subject}_{time}_{task}.txt [when time in 01, 02]
+#>         └── data: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]
+```
+
+We should find our four problems:
+
+``` r
 ft |> 
   ft_index() |> 
   ft_glimpse_problems()
 #> 4/11 files with 4 problems.
 #> 
 #> ab-01/day02/ab-01_01_green.txt
-#> - capture time='01' conflicts with time='02'
+#> • filename has `time` "01", but a parent directory has `time` "02"
 #> 
 #> ab-01/day02/ab-01_01_red.txt
-#> - capture time='01' conflicts with time='02'
+#> • filename has `time` "01", but a parent directory has `time` "02"
 #> 
 #> ab-02/day02/ab-02_02_yellow.txt
-#> - file 'ab-02_02_yellow.txt' matches no pattern at_layer='data'
+#> • filename 'ab-02_02_yellow.txt' does not match a file pattern at layer `data`
 #> 
 #> ab-02/day03/ab-02_03_green.txt
-#> - file 'ab-02_03_green.txt' matches no pattern at_layer='data'
+#> • filename 'ab-02_03_green.txt' does not match a file pattern at layer `data`
 ```
 
 When the ft is complex, we can print out a tree-like version:
@@ -298,10 +323,10 @@ When the ft is complex, we can print out a tree-like version:
 ``` r
 ft_schema_tree(ft)
 #> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-3
-#> |-- subject: {subject}
-#> |   |-- time: day{time}
-#> |   |   |-- data: default = {subject}_{time}_{task}.txt [when time in 01, 02]
-#> |   |   `-- data: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]
+#> └── subject: {subject}
+#>     └── time: day{time}
+#>         ├── data: default = {subject}_{time}_{task}.txt [when time in 01, 02]
+#>         └── data: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]
 ```
 
 Because the parsed out layers and fields need to kept separate from each
@@ -324,7 +349,7 @@ ft |>
 #> $ task           <chr> "green", "red", "green", "red", "yellow", "green", "red…
 #> $ pattern        <chr> "default", "default", "default", "default", "day03", "d…
 #> $ .ok            <lgl> TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE,…
-#> $ .problems      <list> <NULL>, <NULL>, "capture time='01' conflicts with time…
+#> $ .problems      <list> <NULL>, <NULL>, "filename has {.var time} {.val 01}, b…
 ```
 
 ## Current impressions

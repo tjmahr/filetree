@@ -245,6 +245,13 @@ ft |>
 ```
 
 
+When the ft is complex, we can print out a tree-like version:
+
+```{r}
+ft_schema_tree(ft)
+```
+
+
 Because the parsed out layers and fields need to kept separate from each other, we get a lot of columns now: 
 
 ```{r}
