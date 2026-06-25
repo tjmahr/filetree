@@ -1,5 +1,5 @@
 ---
-status: in progress
+status: done
 ---
 
 # Message Cleanup
@@ -26,10 +26,10 @@ Track small user-facing message improvements for `filetree`.
 - [x] Say `a parent directory` in conflict messages.
 - [x] Improve file and directory pattern-miss messages to say the name does not match a pattern at layer `...`.
 - [x] Ensure directory pattern-miss messages also use cli formatting.
-- [ ] Investigate `R CMD check` failure in this Windows/Codex environment.
+- [x] Document `R CMD check` failure as an external `sessioninfo`/Quarto issue awaiting a `sessioninfo` release.
 - [x] Replace non-ASCII box drawing literals in `R/filetree.R` with `\u` escapes.
 - [x] Wrap overlong `ft_add_file_pattern()` roxygen example line and regenerate Rd.
-- [ ] User will decide how to handle/revert README source changes.
+- [x] User will run README examples and regenerate README output as needed; Codex should not worry about README files.
 
 ## Design Decisions
 
@@ -86,3 +86,17 @@ Track small user-facing message improvements for `filetree`.
 **Remaining check messages:** `devtools::check()` still exits with 1 ERROR, 1 WARNING, and 1 NOTE during DESCRIPTION metadata. The NOTE is `unable to verify current time`. The WARNING/ERROR section contains only locale startup warnings plus the Quarto command failure where `quarto TMPDIR=... -V` is treated as an unknown command.
 
 **Formatting:** `air format .` could not run because `air` is not installed on this machine.
+
+### 2026-06-25 - README and Check Follow-Up
+
+**Decision:** Treat README source/output handling as user-owned. The user runs README examples to test changes and regenerates output as needed.
+
+**Decision:** Do not treat the Quarto `TMPDIR` check failure as a local blocker.
+
+**Rationale:** The Quarto issue has been diagnosed in the appropriate GitHub issue and is waiting on a new `sessioninfo` package release.
+
+### 2026-06-25 - Mark Complete
+
+**Decision:** Mark this message-cleanup tracking note as done.
+
+**Rationale:** The local message cleanup work is complete, README regeneration is user-owned, and the remaining check issue is external.
