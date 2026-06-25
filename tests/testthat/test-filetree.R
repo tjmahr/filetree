@@ -589,6 +589,45 @@ test_that("Directory pattern problems use cli formatting and layer context", {
   )
 })
 
+test_that("File patterns at parent layers validate sidecar files", {
+  root <- fs::path_temp("filetree-sidecar-files")
+  ft_messages <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_dir_pattern("time", "day{time}") |>
+    ft_add_file_pattern("subject", "{subject}-manifest.txt") |>
+    ft_add_file_pattern("data", "{subject}_{time}_{task}.txt")
+
+  index <- ft_index(
+    ft_messages,
+    fs::path(
+      root,
+      c(
+        "ab-01/ab-01-manifest.txt",
+        "ab-02/aa-02-manifest.txt",
+        "ab-03/not-a-manifest.csv"
+      )
+    )
+  )
+
+  expect_equal(index$at_layer, c("subject", "subject", "subject"))
+  expect_true(index$.ok[[1]])
+  expect_false(index$.ok[[2]])
+  expect_false(index$.ok[[3]])
+  expect_equal(
+    index$.problems[[2]],
+    "filename has {.var subject} {.val aa-02}, but a parent directory has {.var subject} {.val ab-02}"
+  )
+  expect_equal(
+    index$.problems[[3]],
+    "filename 'not-a-manifest.csv' does not match a file pattern at layer `subject`"
+  )
+})
+
 test_that("Problem glimpses print a compact summary from an index", {
   index <- tibble::tibble(
     .rel = c("a.txt", "b.txt", "c.txt"),
@@ -666,8 +705,41 @@ test_that("Schema trees format layers and conditional file patterns", {
   expect_equal(lines[[1]], as.character(ft_schema$root))
   expect_true(any(grepl("subject: {subject}", lines, fixed = TRUE)))
   expect_true(any(grepl("time: day{time}", lines, fixed = TRUE)))
-  expect_true(any(grepl("default = {subject}_{time}_{task}.txt [when time in 01, 02]", lines, fixed = TRUE)))
-  expect_true(any(grepl("day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]", lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: default = {subject}_{time}_{task}.txt [when time in 01, 02]", lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]", lines, fixed = TRUE)))
+})
+
+test_that("Schema trees show file patterns registered on parent layers", {
+  ft_schema <- ft_init("demo-root", c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_dir_pattern("time", "day{time}") |>
+    ft_add_file_pattern("subject", "{subject}-manifest.txt") |>
+    ft_add_file_pattern("time", "{subject}_{time}-manifest.txt") |>
+    ft_add_file_pattern("data", "{subject}_{time}_{task}.txt")
+
+  lines <- ft_format_schema_tree(ft_schema)
+
+  subject_manifest <- grep("`subject` file: {subject}-manifest.txt", lines, fixed = TRUE)
+  subject_layer <- grep("subject: {subject}", lines, fixed = TRUE)
+  time_manifest <- grep("`time` file: {subject}_{time}-manifest.txt", lines, fixed = TRUE)
+  time_layer <- grep("time: day{time}", lines, fixed = TRUE)
+  data_file <- grep("`data` file: {subject}_{time}_{task}.txt", lines, fixed = TRUE)
+
+  expect_length(subject_manifest, 1)
+  expect_length(time_manifest, 1)
+  expect_length(data_file, 1)
+  expect_lt(subject_manifest, subject_layer)
+  expect_lt(subject_layer, time_manifest)
+  expect_lt(time_manifest, time_layer)
+  expect_lt(time_layer, data_file)
+  expect_match(lines[[subject_manifest]], "^\u251c\u2500\u2500")
+  expect_match(lines[[time_manifest]], "^    \u251c\u2500\u2500")
+  expect_match(lines[[data_file]], "^        \u2514\u2500\u2500")
 })
 
 test_that("Schema trees hide default pattern names only for singleton layers", {
@@ -678,7 +750,7 @@ test_that("Schema trees hide default pattern names only for singleton layers", {
 
   single_lines <- ft_format_schema_tree(ft_single)
 
-  expect_true(any(grepl("data: {subject}_{task}.txt", single_lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: {subject}_{task}.txt", single_lines, fixed = TRUE)))
   expect_false(any(grepl("default = {subject}_{task}.txt", single_lines, fixed = TRUE)))
 
   ft_multi <- ft_single |>
@@ -686,8 +758,8 @@ test_that("Schema trees hide default pattern names only for singleton layers", {
 
   multi_lines <- ft_format_schema_tree(ft_multi)
 
-  expect_true(any(grepl("data: default = {subject}_{task}.txt", multi_lines, fixed = TRUE)))
-  expect_true(any(grepl("data: yellow = {subject}_yellow.txt", multi_lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: default = {subject}_{task}.txt", multi_lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: yellow = {subject}_yellow.txt", multi_lines, fixed = TRUE)))
 })
 
 test_that("Schema trees print and return the filetree invisibly", {
@@ -727,8 +799,8 @@ test_that("Schema trees format layers and conditional file patterns", {
   expect_equal(lines[[1]], as.character(ft_schema$root))
   expect_true(any(grepl("subject: {subject}", lines, fixed = TRUE)))
   expect_true(any(grepl("time: day{time}", lines, fixed = TRUE)))
-  expect_true(any(grepl("default = {subject}_{time}_{task}.txt [when time in 01, 02]", lines, fixed = TRUE)))
-  expect_true(any(grepl("day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]", lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: default = {subject}_{time}_{task}.txt [when time in 01, 02]", lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]", lines, fixed = TRUE)))
 })
 
 test_that("Schema trees hide default pattern names only for singleton layers", {
@@ -739,7 +811,7 @@ test_that("Schema trees hide default pattern names only for singleton layers", {
 
   single_lines <- ft_format_schema_tree(ft_single)
 
-  expect_true(any(grepl("data: {subject}_{task}.txt", single_lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: {subject}_{task}.txt", single_lines, fixed = TRUE)))
   expect_false(any(grepl("default = {subject}_{task}.txt", single_lines, fixed = TRUE)))
 
   ft_multi <- ft_single |>
@@ -747,8 +819,8 @@ test_that("Schema trees hide default pattern names only for singleton layers", {
 
   multi_lines <- ft_format_schema_tree(ft_multi)
 
-  expect_true(any(grepl("data: default = {subject}_{task}.txt", multi_lines, fixed = TRUE)))
-  expect_true(any(grepl("data: yellow = {subject}_yellow.txt", multi_lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: default = {subject}_{task}.txt", multi_lines, fixed = TRUE)))
+  expect_true(any(grepl("`data` file: yellow = {subject}_yellow.txt", multi_lines, fixed = TRUE)))
 })
 
 test_that("Schema trees print and return the filetree invisibly", {

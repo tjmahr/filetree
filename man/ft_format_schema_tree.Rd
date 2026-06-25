@@ -14,6 +14,8 @@ Character vector containing the schema tree lines.
 }
 \description{
 Create a tree-shaped summary of the declared directory and file patterns.
+File patterns are shown in the parent directory where files for that layer
+live, with labels such as \verb{ `time` file:} and \verb{ `data` file:}.
 }
 \examples{
 root <- system.file("demo-1", package = "filetree")

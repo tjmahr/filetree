@@ -122,7 +122,7 @@ ft |> ft_schema_tree()
 #> C:/Users/trist/Documents/GitRepos/filetree/inst/demo-1
 #> └── subject: {subject}
 #>     └── time: {time}
-#>         └── data: {subject}_{task}.txt
+#>         └── `data` file: {subject}_{task}.txt
 ```
 
 Now we can validate and parse the file names.
@@ -276,7 +276,7 @@ ft <- "./inst/demo-3" |>
     when = list(time = c("01", "02")),
   ) |> 
   ft_add_file_pattern(
-    "subject", 
+    "time", 
     "{subject}-manifest.txt"
   ) |> 
   ft_add_file_pattern(
@@ -295,24 +295,28 @@ In the tree view, we can see multiple file patterns in the `data` layer:
 ft_schema_tree(ft)
 #> C:/Users/trist/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
+#>     ├── `time` file: {subject}-manifest.txt
 #>     └── time: day{time}
-#>         ├── data: default = {subject}_{time}_{task}.txt [when time in 01, 02]
-#>         └── data: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]
+#>         ├── `data` file: default = {subject}_{time}_{task}.txt [when time in 01, 02]
+#>         └── `data` file: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]
 ```
 
-We should find our four problems:
+We should find our five problems:
 
 ``` r
 ft |> 
   ft_index() |> 
   ft_glimpse_problems()
-#> 4/13 files with 4 problems.
+#> 5/13 files with 5 problems.
 #> 
 #> ab-01/day02/ab-01_01_green.txt
 #> • filename has `time` "01", but a parent directory has `time` "02"
 #> 
 #> ab-01/day02/ab-01_01_red.txt
 #> • filename has `time` "01", but a parent directory has `time` "02"
+#> 
+#> ab-02/aa-02-manifest.txt
+#> • filename has `subject` "aa-02", but a parent directory has `subject` "ab-02"
 #> 
 #> ab-02/day02/ab-02_02_yellow.txt
 #> • filename 'ab-02_02_yellow.txt' does not match a file pattern at layer `data`
@@ -327,9 +331,10 @@ When the ft is complex, we can print out a tree-like version:
 ft_schema_tree(ft)
 #> C:/Users/trist/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
+#>     ├── `time` file: {subject}-manifest.txt
 #>     └── time: day{time}
-#>         ├── data: default = {subject}_{time}_{task}.txt [when time in 01, 02]
-#>         └── data: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]
+#>         ├── `data` file: default = {subject}_{time}_{task}.txt [when time in 01, 02]
+#>         └── `data` file: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]
 ```
 
 Because the parsed out layers and fields need to kept separate from each
@@ -350,8 +355,8 @@ ft |>
 #> $ subject        <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "…
 #> $ time           <chr> NA, "01", "01", "02", "02", "03", NA, "01", "01", "02",…
 #> $ task           <chr> NA, "green", "red", "green", "red", "yellow", NA, "gree…
-#> $ pattern        <chr> NA, "default", "default", "default", "default", "day03"…
-#> $ .ok            <lgl> TRUE, TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE,…
+#> $ pattern        <chr> "default", "default", "default", "default", "default", …
+#> $ .ok            <lgl> TRUE, TRUE, TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, TRUE…
 #> $ .problems      <list> <NULL>, <NULL>, <NULL>, "filename has {.var time} {.va…
 ```
 

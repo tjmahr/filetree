@@ -22,7 +22,9 @@ the matched pattern name, \code{.ok} flag, and \code{.problems} list-column.
 }
 \description{
 Validate file paths against the configured directory and file-name patterns,
-extract placeholder captures, and report any problems.
+extract placeholder captures, and report any problems. File patterns
+registered on parent layers are considered for sidecar files before
+unmatched files are reported.
 }
 \examples{
 root <- system.file("demo-1", package = "filetree")

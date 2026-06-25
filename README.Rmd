@@ -218,7 +218,7 @@ ft <- "./inst/demo-3" |>
     when = list(time = c("01", "02")),
   ) |> 
   ft_add_file_pattern(
-    "subject", 
+    "time", 
     "{subject}-manifest.txt"
   ) |> 
   ft_add_file_pattern(
@@ -239,7 +239,7 @@ In the tree view, we can see multiple file patterns in the `data` layer:
 ft_schema_tree(ft)
 ```
 
-We should find our four problems:
+We should find our five problems:
 
 ```{r}
 ft |> 

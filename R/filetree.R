@@ -272,6 +272,63 @@ ft_add_regex <- function(ft, regexes) {
   ok
 }
 
+.ft_file_pattern_matches <- function(file_name, row, spec) {
+  if (is.null(spec) || length(spec) == 0) return(FALSE)
+
+  row_tbl <- row[1, , drop = FALSE]
+  for (pat_i in seq_along(spec$compiled)) {
+    when <- spec$when[[pat_i]]
+    if (!.ft_when_matches(row_tbl, when)) next
+
+    m <- stringr::str_match(file_name, spec$compiled[[pat_i]])
+    if (!is.na(m[, 1])) return(TRUE)
+  }
+
+  FALSE
+}
+
+.ft_candidate_file_layers <- function(ft, n_dir) {
+  layers <- ft$layers
+  default_idx <- n_dir + 1L
+  parent_idx <- n_dir
+  idx <- c(default_idx, parent_idx)
+  idx <- idx[idx >= 1L & idx <= length(layers)]
+  unique(layers[idx])
+}
+
+.ft_resolve_file_layers <- function(tbl, ft, active) {
+  layer_cols <- paste0("layer__", ft$layers)
+  dir_layer_cols <- layer_cols[-length(layer_cols)]
+  fname <- tbl[[layer_cols[[length(layer_cols)]]]]
+
+  for (j in which(active)) {
+    n_dir <- if (length(dir_layer_cols)) {
+      sum(!is.na(unlist(tbl[j, dir_layer_cols, drop = FALSE])))
+    } else {
+      0L
+    }
+    candidates <- .ft_candidate_file_layers(ft, n_dir)
+    if (!length(candidates)) next
+
+    fallback_layer <- NA_character_
+    for (layer in candidates) {
+      spec <- ft$file_patterns[[layer]]
+      if (is.na(fallback_layer) && .ft_has_file_patterns(ft, layer)) {
+        fallback_layer <- layer
+      }
+      if (.ft_file_pattern_matches(fname[[j]], tbl[j, , drop = FALSE], spec)) {
+        tbl$at_layer[[j]] <- layer
+        break
+      }
+    }
+    if (!is.na(fallback_layer) && !.ft_has_file_patterns(ft, tbl$at_layer[[j]])) {
+      tbl$at_layer[[j]] <- fallback_layer
+    }
+  }
+
+  tbl
+}
+
 # ---- directory patterns ----
 # patterns validate (and may extract from) the directory name at `layer`
 
@@ -315,7 +372,9 @@ ft_add_dir_pattern <- function(ft, layer, patterns) {
 #' Register file-name patterns for a layer
 #'
 #' Compile named patterns that validate and extract captures from file names
-#' for files that belong to a specific layer.
+#' for files that belong to a specific layer. File patterns may be registered
+#' on any configured layer, including non-terminal directory layers, so sidecar
+#' files such as subject-level manifests can live beside child directories.
 #'
 #' @param ft A `filetree` object.
 #' @param layer Layer at which the files live (must be listed in `ft$layers`).
@@ -481,7 +540,9 @@ ft_list <- function(ft) {
 #' Index files against a filetree specification
 #'
 #' Validate file paths against the configured directory and file-name patterns,
-#' extract placeholder captures, and report any problems.
+#' extract placeholder captures, and report any problems. File patterns
+#' registered on parent layers are considered for sidecar files before
+#' unmatched files are reported.
 #'
 #' @param ft A `filetree` object.
 #' @param files Optional character vector of file paths to check. Defaults to
@@ -682,6 +743,8 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
     }
   }
 
+  tbl <- .ft_resolve_file_layers(tbl, ft, active)
+
   # ---- validate / extract from file name via patterns at at_layer ----
   fname <- tbl[[paste0("layer__", file_layer)]]
   for (layer in names(ft$file_patterns)) {
@@ -848,6 +911,8 @@ ft_glimpse_problems <- function(x, n = 10, ...) {
 #' Format a filetree schema as a tree
 #'
 #' Create a tree-shaped summary of the declared directory and file patterns.
+#' File patterns are shown in the parent directory where files for that layer
+#' live, with labels such as `` `time` file:`` and `` `data` file:``.
 #'
 #' @param ft A `filetree` object.
 #' @return Character vector containing the schema tree lines.
@@ -871,31 +936,16 @@ ft_format_schema_tree <- function(ft) {
 
   layers <- ft$layers
   dir_layers <- if (length(layers) >= 2) layers[-length(layers)] else character()
-  file_layer <- layers[[length(layers)]]
 
   lines <- as.character(ft$root)
-  prefix <- ""
 
-  for (i in seq_along(dir_layers)) {
-    layer <- dir_layers[[i]]
-    branch <- "\u2514\u2500\u2500 "
-    lines <- c(lines, paste0(prefix, branch, .ft_format_dir_schema(ft, layer)))
-    prefix <- paste0(prefix, "    ")
+  if (!length(dir_layers)) {
+    return(c(lines, .ft_format_schema_items(.ft_format_file_schema(ft, layers[[1]]), "")))
   }
 
-  file_lines <- .ft_format_file_schema(ft, file_layer)
-  if (length(file_lines)) {
-    for (i in seq_along(file_lines)) {
-      branch <- if (i == length(file_lines)) {
-        "\u2514\u2500\u2500 "
-      } else {
-        "\u251c\u2500\u2500 "
-      }
-      lines <- c(lines, paste0(prefix, branch, file_lines[[i]]))
-    }
-  }
-
-  lines
+  root_file_lines <- .ft_format_file_schema(ft, layers[[1]])
+  dir_lines <- .ft_format_schema_dir(ft, 1L, "", has_following = FALSE)
+  c(lines, .ft_format_schema_items(root_file_lines, "", has_following = length(dir_lines) > 0), dir_lines)
 }
 
 #' Print a filetree schema tree
@@ -939,11 +989,12 @@ ft_schema_tree <- function(ft) {
   out <- character(length(spec$raw))
   for (i in seq_along(spec$raw)) {
     nm <- names(spec$raw)[[i]]
-    label <- if (identical(nm, "default") && length(spec$raw) == 1) {
-      paste0(layer, ": ", unname(spec$raw[[i]]))
+    pattern_label <- if (identical(nm, "default") && length(spec$raw) == 1) {
+      unname(spec$raw[[i]])
     } else {
-      paste0(layer, ": ", nm, " = ", unname(spec$raw[[i]]))
+      paste0(nm, " = ", unname(spec$raw[[i]]))
     }
+    label <- paste0("`", layer, "` file: ", pattern_label)
     annotations <- c(
       .ft_format_when_annotation(spec$when[[i]]),
       .ft_format_with_annotation(spec$with[[i]])
@@ -953,6 +1004,49 @@ ft_schema_tree <- function(ft) {
       label <- paste0(label, " [", paste(annotations, collapse = "; "), "]")
     }
     out[[i]] <- label
+  }
+  out
+}
+
+.ft_format_schema_dir <- function(ft, dir_i, prefix, has_following = FALSE) {
+  dir_layers <- ft$layers[-length(ft$layers)]
+  layer <- dir_layers[[dir_i]]
+
+  branch <- if (has_following) {
+    "\u251c\u2500\u2500 "
+  } else {
+    "\u2514\u2500\u2500 "
+  }
+  lines <- paste0(prefix, branch, .ft_format_dir_schema(ft, layer))
+  child_prefix <- paste0(prefix, if (has_following) "\u2502   " else "    ")
+
+  child_layer <- ft$layers[[dir_i + 1L]]
+  file_lines <- .ft_format_file_schema(ft, child_layer)
+  next_lines <- if (dir_i < length(dir_layers)) {
+    .ft_format_schema_dir(ft, dir_i + 1L, child_prefix)
+  } else {
+    character()
+  }
+
+  c(
+    lines,
+    .ft_format_schema_items(file_lines, child_prefix, has_following = length(next_lines) > 0),
+    next_lines
+  )
+}
+
+.ft_format_schema_items <- function(items, prefix, has_following = FALSE) {
+  if (!length(items)) return(character())
+
+  out <- character(length(items))
+  for (i in seq_along(items)) {
+    is_last <- i == length(items) && !has_following
+    branch <- if (is_last) {
+      "\u2514\u2500\u2500 "
+    } else {
+      "\u251c\u2500\u2500 "
+    }
+    out[[i]] <- paste0(prefix, branch, items[[i]])
   }
   out
 }

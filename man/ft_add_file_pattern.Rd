@@ -28,7 +28,9 @@ The updated \code{filetree} object.
 }
 \description{
 Compile named patterns that validate and extract captures from file names
-for files that belong to a specific layer.
+for files that belong to a specific layer. File patterns may be registered
+on any configured layer, including non-terminal directory layers, so sidecar
+files such as subject-level manifests can live beside child directories.
 }
 \examples{
 root <- system.file("demo-1", package = "filetree")
