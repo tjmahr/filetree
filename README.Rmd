@@ -168,16 +168,14 @@ The following example demonstrates
 In the `time` layer, folders are named `day{time}`. In the data layer, files are
 named `"{subject}_{time}_{task}.txt"`. In this demo, there is a file where the
 time values don't match. There is also a task `"yellow"` that only appears on
-`day03`.
-
-We need to identify that the `ab-01/day02/ab-01_01*` has inconsistent `time`
-values and that `ab-02/day02/[yellow]` is unexpected and `02/day03/[green]` is
-unexpected:
+`day03`. There is also a file that appears at a middle layer in the hierarchy 
+that we need to check.
 
 ```
 # fs::dir_tree("./inst/demo-3")
 ./inst/demo-3
 ├── ab-01
+│   ├── ab-01-manifest.txt
 │   ├── day01
 │   │   ├── ab-01_01_green.txt
 │   │   └── ab-01_01_red.txt
@@ -187,6 +185,7 @@ unexpected:
 │   └── day03
 │       └── ab-01_03_yellow.txt
 └── ab-02
+    ├── aa-02-manifest.txt       <---- wrong subject value
     ├── day01
     │   ├── ab-02_01_green.txt
     │   └── ab-02_01_red.txt
@@ -217,6 +216,10 @@ ft <- "./inst/demo-3" |>
     "{subject}_{time}_{task}.txt",
     # limit when this pattern is used
     when = list(time = c("01", "02")),
+  ) |> 
+  ft_add_file_pattern(
+    "subject", 
+    "{subject}-manifest.txt"
   ) |> 
   ft_add_file_pattern(
     "data", 

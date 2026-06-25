@@ -71,7 +71,7 @@ ft <- ft_init(
   layers = c("subject", "time", "data")
 )
 ft
-#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/trist/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: <empty>
@@ -104,7 +104,7 @@ ft <- ft |>
     patterns = "{subject}_{task}.txt"
   )
 ft
-#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/trist/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: 3 (subject, time, task)
@@ -119,7 +119,7 @@ We can also view the filetree schema as a tree:
 
 ``` r
 ft |> ft_schema_tree()
-#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
+#> C:/Users/trist/Documents/GitRepos/filetree/inst/demo-1
 #> └── subject: {subject}
 #>     └── time: {time}
 #>         └── data: {subject}_{task}.txt
@@ -228,15 +228,13 @@ The following example demonstrates
 In the `time` layer, folders are named `day{time}`. In the data layer,
 files are named `"{subject}_{time}_{task}.txt"`. In this demo, there is
 a file where the time values don’t match. There is also a task
-`"yellow"` that only appears on `day03`.
-
-We need to identify that the `ab-01/day02/ab-01_01*` has inconsistent
-`time` values and that `ab-02/day02/[yellow]` is unexpected and
-`02/day03/[green]` is unexpected:
+`"yellow"` that only appears on `day03`. There is also a file that
+appears at a middle layer in the hierarchy that we need to check.
 
     # fs::dir_tree("./inst/demo-3")
     ./inst/demo-3
     ├── ab-01
+    │   ├── ab-01-manifest.txt
     │   ├── day01
     │   │   ├── ab-01_01_green.txt
     │   │   └── ab-01_01_red.txt
@@ -246,6 +244,7 @@ We need to identify that the `ab-01/day02/ab-01_01*` has inconsistent
     │   └── day03
     │       └── ab-01_03_yellow.txt
     └── ab-02
+        ├── aa-02-manifest.txt       <---- wrong subject value
         ├── day01
         │   ├── ab-02_01_green.txt
         │   └── ab-02_01_red.txt
@@ -277,6 +276,10 @@ ft <- "./inst/demo-3" |>
     when = list(time = c("01", "02")),
   ) |> 
   ft_add_file_pattern(
+    "subject", 
+    "{subject}-manifest.txt"
+  ) |> 
+  ft_add_file_pattern(
     "data", 
     c(day03 = "{subject}_{time}_{task}.txt"),
     # limit when this pattern is used
@@ -290,7 +293,7 @@ In the tree view, we can see multiple file patterns in the `data` layer:
 
 ``` r
 ft_schema_tree(ft)
-#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-3
+#> C:/Users/trist/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
 #>     └── time: day{time}
 #>         ├── data: default = {subject}_{time}_{task}.txt [when time in 01, 02]
@@ -303,7 +306,7 @@ We should find our four problems:
 ft |> 
   ft_index() |> 
   ft_glimpse_problems()
-#> 4/11 files with 4 problems.
+#> 4/13 files with 4 problems.
 #> 
 #> ab-01/day02/ab-01_01_green.txt
 #> • filename has `time` "01", but a parent directory has `time` "02"
@@ -322,7 +325,7 @@ When the ft is complex, we can print out a tree-like version:
 
 ``` r
 ft_schema_tree(ft)
-#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-3
+#> C:/Users/trist/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
 #>     └── time: day{time}
 #>         ├── data: default = {subject}_{time}_{task}.txt [when time in 01, 02]
@@ -336,20 +339,20 @@ other, we get a lot of columns now:
 ft |> 
   ft_index() |> 
   dplyr::glimpse()
-#> Rows: 11
+#> Rows: 13
 #> Columns: 12
-#> $ .path          <fs::path> "C:/Users/mahr/Documents/GitRepos/filetree/inst/de…
-#> $ .rel           <fs::path> "ab-01/day01/ab-01_01_green.txt", "ab-01/day01/ab-…
-#> $ at_layer       <chr> "data", "data", "data", "data", "data", "data", "data",…
-#> $ layer__subject <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-02", "…
-#> $ layer__time    <chr> "day01", "day01", "day02", "day02", "day03", "day01", "…
-#> $ layer__data    <chr> "ab-01_01_green.txt", "ab-01_01_red.txt", "ab-01_01_gre…
-#> $ subject        <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-02", "…
-#> $ time           <chr> "01", "01", "02", "02", "03", "01", "01", "02", "02", "…
-#> $ task           <chr> "green", "red", "green", "red", "yellow", "green", "red…
-#> $ pattern        <chr> "default", "default", "default", "default", "day03", "d…
-#> $ .ok            <lgl> TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE,…
-#> $ .problems      <list> <NULL>, <NULL>, "filename has {.var time} {.val 01}, b…
+#> $ .path          <fs::path> "C:/Users/trist/Documents/GitRepos/filetree/inst/d…
+#> $ .rel           <fs::path> "ab-01/ab-01-manifest.txt", "ab-01/day01/ab-01_01_…
+#> $ at_layer       <chr> "time", "data", "data", "data", "data", "data", "time",…
+#> $ layer__subject <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "…
+#> $ layer__time    <chr> NA, "day01", "day01", "day02", "day02", "day03", NA, "d…
+#> $ layer__data    <chr> "ab-01-manifest.txt", "ab-01_01_green.txt", "ab-01_01_r…
+#> $ subject        <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "…
+#> $ time           <chr> NA, "01", "01", "02", "02", "03", NA, "01", "01", "02",…
+#> $ task           <chr> NA, "green", "red", "green", "red", "yellow", NA, "gree…
+#> $ pattern        <chr> NA, "default", "default", "default", "default", "day03"…
+#> $ .ok            <lgl> TRUE, TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE,…
+#> $ .problems      <list> <NULL>, <NULL>, <NULL>, "filename has {.var time} {.va…
 ```
 
 ## Current impressions
