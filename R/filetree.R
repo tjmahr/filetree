@@ -5,7 +5,6 @@
 #
 # deps: fs, stringr, tibble, dplyr, rlang
 
-
 # ---- constructors ----
 
 #' Create a filetree specification
@@ -30,14 +29,21 @@ ft_init <- function(root, layers) {
   stopifnot(is.character(layers), length(layers) >= 1, all(nzchar(layers)))
   stopifnot(length(unique(layers)) == length(layers))
 
-  dir_layers <- if (length(layers) >= 2) layers[-length(layers)] else character()
+  dir_layers <- if (length(layers) >= 2) {
+    layers[-length(layers)]
+  } else {
+    character()
+  }
 
   structure(
     list(
       root = fs::path_abs(root),
-      layers = layers,                 # includes final file-name layer
+      layers = layers, # includes final file-name layer
       regex_pool = rlang::set_names(list(), character()),
-      dir_patterns = rlang::set_names(vector("list", length(dir_layers)), dir_layers),
+      dir_patterns = rlang::set_names(
+        vector("list", length(dir_layers)),
+        dir_layers
+      ),
       file_patterns = rlang::set_names(vector("list", length(layers)), layers) # patterns at any layer
     ),
     class = "filetree"
@@ -68,7 +74,11 @@ ft_init <- function(root, layers) {
 #' names(ft$regex_pool)
 #' @export
 ft_add_regex <- function(ft, regexes) {
-  stopifnot(inherits(ft, "filetree"), is.character(regexes), !is.null(names(regexes)))
+  stopifnot(
+    inherits(ft, "filetree"),
+    is.character(regexes),
+    !is.null(names(regexes))
+  )
   for (nm in names(regexes)) {
     rx <- regexes[[nm]]
     stopifnot(length(rx) == 1, nzchar(rx))
@@ -90,8 +100,12 @@ ft_add_regex <- function(ft, regexes) {
   ph <- .ft_placeholders(pattern)
   missing <- setdiff(ph, names(regex_pool))
   if (length(missing)) {
-    stop("Pattern references unknown regex name(s): ", paste(missing, collapse = ", "),
-         "\n  pattern: ", pattern)
+    stop(
+      "Pattern references unknown regex name(s): ",
+      paste(missing, collapse = ", "),
+      "\n  pattern: ",
+      pattern
+    )
   }
 
   compiled <- pattern
@@ -109,13 +123,18 @@ ft_add_regex <- function(ft, regexes) {
     )
   }
   compiled <- paste0("^", compiled, "$")
-  attr(compiled, "capture_names") <- stats::setNames(names(capture_names), capture_names)
+  attr(compiled, "capture_names") <- stats::setNames(
+    names(capture_names),
+    capture_names
+  )
   compiled
 }
 
 .ft_restore_capture_names <- function(match, compiled) {
   capture_names <- attr(compiled, "capture_names", exact = TRUE)
-  if (is.null(capture_names)) return(match)
+  if (is.null(capture_names)) {
+    return(match)
+  }
 
   cols <- colnames(match)
   remap <- match(cols, names(capture_names))
@@ -139,7 +158,9 @@ ft_add_regex <- function(ft, regexes) {
   missing <- setdiff(ph, names(regex_pool))
   if (length(missing)) {
     stop(
-      "Regex pool entry '", name, "' references unknown regex name(s): ",
+      "Regex pool entry '",
+      name,
+      "' references unknown regex name(s): ",
       paste(missing, collapse = ", ")
     )
   }
@@ -176,7 +197,9 @@ ft_add_regex <- function(ft, regexes) {
 
 .ft_normalize_patterns <- function(patterns) {
   stopifnot(is.character(patterns))
-  if (length(patterns) == 1 && is.null(names(patterns))) names(patterns) <- "default"
+  if (length(patterns) == 1 && is.null(names(patterns))) {
+    names(patterns) <- "default"
+  }
   stopifnot(!is.null(names(patterns)))
   patterns
 }
@@ -184,19 +207,34 @@ ft_add_regex <- function(ft, regexes) {
 .ft_recompile_patterns <- function(ft) {
   for (layer in names(ft$dir_patterns)) {
     spec <- ft$dir_patterns[[layer]]
-    if (is.null(spec) || length(spec) == 0) next
-    compiled <- lapply(spec$raw, .ft_compile_pattern, regex_pool = ft$regex_pool)
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
+    compiled <- lapply(
+      spec$raw,
+      .ft_compile_pattern,
+      regex_pool = ft$regex_pool
+    )
     ft$dir_patterns[[layer]]$compiled <- compiled
   }
 
   for (at_layer in names(ft$file_patterns)) {
     spec <- ft$file_patterns[[at_layer]]
-    if (is.null(spec) || length(spec) == 0) next
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
     if (is.null(spec$with)) {
-      spec$with <- rep(list(rlang::set_names(character(), character())), length(spec$raw))
+      spec$with <- rep(
+        list(rlang::set_names(character(), character())),
+        length(spec$raw)
+      )
       names(spec$with) <- names(spec$raw)
     }
-    regex_pool <- lapply(spec$with, .ft_merge_regex_pool, regex_pool = ft$regex_pool)
+    regex_pool <- lapply(
+      spec$with,
+      .ft_merge_regex_pool,
+      regex_pool = ft$regex_pool
+    )
     compiled <- Map(.ft_compile_pattern, spec$raw, regex_pool)
     ft$file_patterns[[at_layer]]$compiled <- compiled
     ft$file_patterns[[at_layer]]$regex_pool <- regex_pool
@@ -215,7 +253,9 @@ ft_add_regex <- function(ft, regexes) {
 }
 
 .ft_normalize_when <- function(when) {
-  if (is.null(when)) return(rlang::set_names(character(), character()))
+  if (is.null(when)) {
+    return(rlang::set_names(character(), character()))
+  }
   stopifnot(!is.null(names(when)), all(nzchar(names(when))))
   if (is.character(when)) {
     stopifnot(all(nzchar(when)))
@@ -223,13 +263,19 @@ ft_add_regex <- function(ft, regexes) {
   } else {
     stopifnot(is.list(when))
     stopifnot(all(vapply(when, is.character, logical(1))))
-    stopifnot(all(vapply(when, function(x) length(x) > 0 && all(nzchar(x)), logical(1))))
+    stopifnot(all(vapply(
+      when,
+      function(x) length(x) > 0 && all(nzchar(x)),
+      logical(1)
+    )))
   }
   when
 }
 
 .ft_normalize_local_regex <- function(with) {
-  if (is.null(with)) return(rlang::set_names(character(), character()))
+  if (is.null(with)) {
+    return(rlang::set_names(character(), character()))
+  }
   stopifnot(is.character(with), !is.null(names(with)))
   stopifnot(all(nzchar(names(with))), all(nzchar(with)))
   with
@@ -253,7 +299,9 @@ ft_add_regex <- function(ft, regexes) {
 }
 
 .ft_when_matches <- function(tbl, when) {
-  if (is.null(when) || length(when) == 0) return(rep(TRUE, nrow(tbl)))
+  if (is.null(when) || length(when) == 0) {
+    return(rep(TRUE, nrow(tbl)))
+  }
 
   ok <- rep(TRUE, nrow(tbl))
   for (nm in names(when)) {
@@ -273,12 +321,16 @@ ft_add_regex <- function(ft, regexes) {
 }
 
 .ft_file_pattern_matches <- function(file_name, row, spec) {
-  if (is.null(spec) || length(spec) == 0) return(FALSE)
+  if (is.null(spec) || length(spec) == 0) {
+    return(FALSE)
+  }
 
   row_tbl <- row[1, , drop = FALSE]
   for (pat_i in seq_along(spec$compiled)) {
     when <- spec$when[[pat_i]]
-    if (!.ft_when_matches(row_tbl, when)) next
+    if (!.ft_when_matches(row_tbl, when)) {
+      next
+    }
 
     m <- stringr::str_match(file_name, spec$compiled[[pat_i]])
     if (!is.na(m[, 1])) return(TRUE)
@@ -308,7 +360,9 @@ ft_add_regex <- function(ft, regexes) {
       0L
     }
     candidates <- .ft_candidate_file_layers(ft, n_dir)
-    if (!length(candidates)) next
+    if (!length(candidates)) {
+      next
+    }
 
     fallback_layer <- NA_character_
     for (layer in candidates) {
@@ -321,7 +375,9 @@ ft_add_regex <- function(ft, regexes) {
         break
       }
     }
-    if (!is.na(fallback_layer) && !.ft_has_file_patterns(ft, tbl$at_layer[[j]])) {
+    if (
+      !is.na(fallback_layer) && !.ft_has_file_patterns(ft, tbl$at_layer[[j]])
+    ) {
       tbl$at_layer[[j]] <- fallback_layer
     }
   }
@@ -357,7 +413,11 @@ ft_add_regex <- function(ft, regexes) {
 #' @export
 ft_add_dir_pattern <- function(ft, layer, patterns) {
   stopifnot(inherits(ft, "filetree"))
-  stopifnot(is.character(layer), length(layer) == 1, layer %in% names(ft$dir_patterns))
+  stopifnot(
+    is.character(layer),
+    length(layer) == 1,
+    layer %in% names(ft$dir_patterns)
+  )
 
   patterns <- .ft_normalize_patterns(patterns)
   compiled <- lapply(patterns, .ft_compile_pattern, regex_pool = ft$regex_pool)
@@ -450,13 +510,19 @@ ft_add_file_pattern <- function(ft, layer, patterns, when = NULL, with = NULL) {
     ft$file_patterns[[layer]]$compiled <- c(existing$compiled, compiled)
     existing_when <- existing$when
     if (is.null(existing_when)) {
-      existing_when <- rep(list(rlang::set_names(character(), character())), length(existing$raw))
+      existing_when <- rep(
+        list(rlang::set_names(character(), character())),
+        length(existing$raw)
+      )
       names(existing_when) <- names(existing$raw)
     }
     ft$file_patterns[[layer]]$when <- c(existing_when, when_list)
     existing_with <- existing$with
     if (is.null(existing_with)) {
-      existing_with <- rep(list(rlang::set_names(character(), character())), length(existing$raw))
+      existing_with <- rep(
+        list(rlang::set_names(character(), character())),
+        length(existing$raw)
+      )
       names(existing_with) <- names(existing$raw)
     }
     ft$file_patterns[[layer]]$with <- c(existing_with, with_list)
@@ -465,7 +531,10 @@ ft_add_file_pattern <- function(ft, layer, patterns, when = NULL, with = NULL) {
       existing_regex_pool <- rep(list(ft$regex_pool), length(existing$raw))
       names(existing_regex_pool) <- names(existing$raw)
     }
-    ft$file_patterns[[layer]]$regex_pool <- c(existing_regex_pool, regex_pool_list)
+    ft$file_patterns[[layer]]$regex_pool <- c(
+      existing_regex_pool,
+      regex_pool_list
+    )
   }
   ft
 }
@@ -511,8 +580,12 @@ ft_list <- function(ft) {
   # parts includes filename at end
   n_dir <- max(length(parts) - 1L, 0L)
   idx <- n_dir + 1L
-  if (idx <= 0L) return(NA_character_)
-  if (idx > length(ft$layers)) return(".__too_deep__")
+  if (idx <= 0L) {
+    return(NA_character_)
+  }
+  if (idx > length(ft$layers)) {
+    return(".__too_deep__")
+  }
   ft$layers[[idx]]
 }
 
@@ -523,14 +596,18 @@ ft_list <- function(ft) {
   # dir patterns
   for (layer in names(ft$dir_patterns)) {
     spec <- ft$dir_patterns[[layer]]
-    if (is.null(spec) || length(spec) == 0) next
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
     out <- c(out, unlist(lapply(spec$raw, .ft_placeholders), use.names = FALSE))
   }
 
   # file patterns
   for (at_layer in names(ft$file_patterns)) {
     spec <- ft$file_patterns[[at_layer]]
-    if (is.null(spec) || length(spec) == 0) next
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
     out <- c(out, unlist(lapply(spec$raw, .ft_placeholders), use.names = FALSE))
   }
 
@@ -586,13 +663,21 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   parts_list <- strsplit(rel, .Platform$file.sep, fixed = TRUE)
 
   layers <- ft$layers
-  dir_layers <- if (length(layers) >= 2) layers[-length(layers)] else character()
+  dir_layers <- if (length(layers) >= 2) {
+    layers[-length(layers)]
+  } else {
+    character()
+  }
   file_layer <- layers[length(layers)]
 
   layer_cols <- paste0("layer__", layers)
 
   # build one column per layer name (raw component), including final file-name layer
-  layer_mat <- matrix(NA_character_, nrow = length(parts_list), ncol = length(layers))
+  layer_mat <- matrix(
+    NA_character_,
+    nrow = length(parts_list),
+    ncol = length(layers)
+  )
   colnames(layer_mat) <- layer_cols
 
   at_layer <- character(length(parts_list))
@@ -636,10 +721,19 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   problems <- vector("list", n)
 
   # helper: write captures with conflict checking against existing extracted field
-  set_capture_vec <- function(tbl, idx, cn, values, msgs, regex_pool,
-                              source_label = "extracted value",
-                              existing_label = "earlier path layer") {
-    if (!any(idx)) return(list(tbl = tbl, msgs = msgs))
+  set_capture_vec <- function(
+    tbl,
+    idx,
+    cn,
+    values,
+    msgs,
+    regex_pool,
+    source_label = "extracted value",
+    existing_label = "earlier path layer"
+  ) {
+    if (!any(idx)) {
+      return(list(tbl = tbl, msgs = msgs))
+    }
     values <- as.character(unname(values))
     existing <- tbl[[cn]]
 
@@ -669,7 +763,9 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
     rx <- regex_pool[[cn]]
     if (!is.null(rx)) {
       rx <- .ft_expand_pool_regex(cn, regex_pool)
-      bad_rx <- idx & !is.na(tbl[[cn]]) & !stringr::str_detect(tbl[[cn]], paste0("^(?:", rx, ")$"))
+      bad_rx <- idx &
+        !is.na(tbl[[cn]]) &
+        !stringr::str_detect(tbl[[cn]], paste0("^(?:", rx, ")$"))
       if (any(bad_rx)) {
         for (j in which(bad_rx)) {
           msgs[[j]] <- c(
@@ -688,12 +784,18 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   bad_root <- is.na(tbl$at_layer)
   if (any(too_deep)) {
     for (j in which(too_deep)) {
-      problems[[j]] <- c(problems[[j]], sprintf("path deeper than layers (%d)", length(layers)))
+      problems[[j]] <- c(
+        problems[[j]],
+        sprintf("path deeper than layers (%d)", length(layers))
+      )
     }
   }
   if (any(bad_root)) {
     for (j in which(bad_root)) {
-      problems[[j]] <- c(problems[[j]], "file is at or above root; no matching layer")
+      problems[[j]] <- c(
+        problems[[j]],
+        "file is at or above root; no matching layer"
+      )
     }
   }
   active <- !(too_deep | bad_root)
@@ -702,17 +804,23 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   for (layer in dir_layers) {
     raw_vals <- tbl[[paste0("layer__", layer)]]
     spec <- ft$dir_patterns[[layer]]
-    if (is.null(spec) || length(spec) == 0) next
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
 
     layer_active <- active & !is.na(raw_vals)
-    if (!any(layer_active)) next
+    if (!any(layer_active)) {
+      next
+    }
 
     matched <- rep(FALSE, n)
     for (pat_nm in names(spec$compiled)) {
       m <- stringr::str_match(raw_vals, spec$compiled[[pat_nm]])
       m <- .ft_restore_capture_names(m, spec$compiled[[pat_nm]])
       ok <- layer_active & !is.na(m[, 1]) & !matched
-      if (!any(ok)) next
+      if (!any(ok)) {
+        next
+      }
 
       cap_names <- setdiff(colnames(m), "")
       for (cn in cap_names) {
@@ -737,7 +845,11 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       for (j in which(unmatched)) {
         problems[[j]] <- c(
           problems[[j]],
-          sprintf("directory name '%s' does not match a dir pattern at layer `%s`", raw_vals[[j]], layer)
+          sprintf(
+            "directory name '%s' does not match a dir pattern at layer `%s`",
+            raw_vals[[j]],
+            layer
+          )
         )
       }
     }
@@ -750,14 +862,21 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   for (layer in names(ft$file_patterns)) {
     spec <- ft$file_patterns[[layer]]
     layer_rows <- active & tbl$at_layer == layer
-    if (!any(layer_rows)) next
+    if (!any(layer_rows)) {
+      next
+    }
 
     if (is.null(spec) || length(spec) == 0L) {
-      if (!strict) next
+      if (!strict) {
+        next
+      }
       for (j in which(layer_rows)) {
         problems[[j]] <- c(
           problems[[j]],
-          sprintf("no file patterns registered for `%s` files", tbl$at_layer[[j]])
+          sprintf(
+            "no file patterns registered for `%s` files",
+            tbl$at_layer[[j]]
+          )
         )
       }
       next
@@ -770,17 +889,23 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       when <- spec$when[[pat_i]]
       pattern_rows <- layer_rows & .ft_when_matches(tbl, when)
       applicable <- applicable | pattern_rows
-      if (!any(pattern_rows)) next
+      if (!any(pattern_rows)) {
+        next
+      }
 
       m <- stringr::str_match(fname, spec$compiled[[pat_i]])
       m <- .ft_restore_capture_names(m, spec$compiled[[pat_i]])
       ok <- pattern_rows & !is.na(m[, 1]) & !matched
-      if (!any(ok)) next
+      if (!any(ok)) {
+        next
+      }
 
       matched_pattern[ok] <- pat_name
       cap_names <- setdiff(colnames(m), "")
       regex_pool <- spec$regex_pool[[pat_i]]
-      if (is.null(regex_pool)) regex_pool <- ft$regex_pool
+      if (is.null(regex_pool)) {
+        regex_pool <- ft$regex_pool
+      }
       for (cn in cap_names) {
         vals <- m[, cn]
         res <- set_capture_vec(
@@ -819,7 +944,11 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
       for (j in which(unmatched)) {
         problems[[j]] <- c(
           problems[[j]],
-          sprintf("filename '%s' does not match a file pattern at layer `%s`", fname[[j]], tbl$at_layer[[j]])
+          sprintf(
+            "filename '%s' does not match a file pattern at layer `%s`",
+            fname[[j]],
+            tbl$at_layer[[j]]
+          )
         )
       }
     }
@@ -879,7 +1008,12 @@ ft_glimpse_problems <- function(x, n = 10, ...) {
   problem_files <- nrow(problem_rows)
   total_problems <- sum(lengths(problem_rows$.problems))
 
-  cat(sprintf("%d/%d files with %d problems.\n", problem_files, total_files, total_problems))
+  cat(sprintf(
+    "%d/%d files with %d problems.\n",
+    problem_files,
+    total_files,
+    total_problems
+  ))
 
   shown <- min(problem_files, n)
   if (problem_files > shown) {
@@ -903,7 +1037,11 @@ ft_glimpse_problems <- function(x, n = 10, ...) {
   needed <- c(".rel", ".ok", ".problems")
   missing <- setdiff(needed, names(index))
   if (length(missing)) {
-    stop("Index is missing required column(s): ", paste(missing, collapse = ", "), call. = FALSE)
+    stop(
+      "Index is missing required column(s): ",
+      paste(missing, collapse = ", "),
+      call. = FALSE
+    )
   }
   invisible(index)
 }
@@ -935,17 +1073,32 @@ ft_format_schema_tree <- function(ft) {
   stopifnot(inherits(ft, "filetree"))
 
   layers <- ft$layers
-  dir_layers <- if (length(layers) >= 2) layers[-length(layers)] else character()
+  dir_layers <- if (length(layers) >= 2) {
+    layers[-length(layers)]
+  } else {
+    character()
+  }
 
   lines <- as.character(ft$root)
 
   if (!length(dir_layers)) {
-    return(c(lines, .ft_format_schema_items(.ft_format_file_schema(ft, layers[[1]]), "")))
+    return(c(
+      lines,
+      .ft_format_schema_items(.ft_format_file_schema(ft, layers[[1]]), "")
+    ))
   }
 
   root_file_lines <- .ft_format_file_schema(ft, layers[[1]])
   dir_lines <- .ft_format_schema_dir(ft, 1L, "", has_following = FALSE)
-  c(lines, .ft_format_schema_items(root_file_lines, "", has_following = length(dir_lines) > 0), dir_lines)
+  c(
+    lines,
+    .ft_format_schema_items(
+      root_file_lines,
+      "",
+      has_following = length(dir_lines) > 0
+    ),
+    dir_lines
+  )
 }
 
 #' Print a filetree schema tree
@@ -1030,13 +1183,19 @@ ft_schema_tree <- function(ft) {
 
   c(
     lines,
-    .ft_format_schema_items(file_lines, child_prefix, has_following = length(next_lines) > 0),
+    .ft_format_schema_items(
+      file_lines,
+      child_prefix,
+      has_following = length(next_lines) > 0
+    ),
     next_lines
   )
 }
 
 .ft_format_schema_items <- function(items, prefix, has_following = FALSE) {
-  if (!length(items)) return(character())
+  if (!length(items)) {
+    return(character())
+  }
 
   out <- character(length(items))
   for (i in seq_along(items)) {
@@ -1052,7 +1211,9 @@ ft_schema_tree <- function(ft) {
 }
 
 .ft_format_when_annotation <- function(when) {
-  if (is.null(when) || length(when) == 0) return("")
+  if (is.null(when) || length(when) == 0) {
+    return("")
+  }
   pieces <- character(length(when))
   for (i in seq_along(when)) {
     values <- unname(when[[i]])
@@ -1063,7 +1224,9 @@ ft_schema_tree <- function(ft) {
 }
 
 .ft_format_with_annotation <- function(with) {
-  if (is.null(with) || length(with) == 0) return("")
+  if (is.null(with) || length(with) == 0) {
+    return("")
+  }
   pieces <- paste0(names(with), " = ", unname(with))
   paste("with", paste(pieces, collapse = ", "))
 }
@@ -1090,7 +1253,11 @@ format.filetree <- function(x, ..., width = getOption("width")) {
   stopifnot(inherits(x, "filetree"))
 
   layers <- x$layers
-  dir_layers <- if (length(layers) >= 2) layers[-length(layers)] else character()
+  dir_layers <- if (length(layers) >= 2) {
+    layers[-length(layers)]
+  } else {
+    character()
+  }
   file_layer <- layers[length(layers)]
 
   lines <- character()
@@ -1103,17 +1270,24 @@ format.filetree <- function(x, ..., width = getOption("width")) {
     lines <- c(lines, "  regex_pool: <empty>")
   } else {
     shown <- paste(pool_names, collapse = ", ")
-    lines <- c(lines, sprintf("  regex_pool: %d (%s)", length(pool_names), shown))
+    lines <- c(
+      lines,
+      sprintf("  regex_pool: %d (%s)", length(pool_names), shown)
+    )
   }
 
   # dir patterns
   if (length(dir_layers) == 0) {
     lines <- c(lines, "  dir_patterns: <none> (no dir layers)")
   } else {
-    any_dir <- any(vapply(dir_layers, function(layer) {
-      spec <- x$dir_patterns[[layer]]
-      !(is.null(spec) || length(spec) == 0)
-    }, logical(1)))
+    any_dir <- any(vapply(
+      dir_layers,
+      function(layer) {
+        spec <- x$dir_patterns[[layer]]
+        !(is.null(spec) || length(spec) == 0)
+      },
+      logical(1)
+    ))
 
     if (!any_dir) {
       lines <- c(lines, "  dir_patterns: <none>")
@@ -1126,7 +1300,9 @@ format.filetree <- function(x, ..., width = getOption("width")) {
         } else {
           kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
           s <- paste(kv, collapse = ", ")
-          if (nchar(s) > 90) s <- paste0(substr(s, 1, 87), "\u2026")
+          if (nchar(s) > 90) {
+            s <- paste0(substr(s, 1, 87), "\u2026")
+          }
           lines <- c(lines, sprintf("    - %s: %s", layer, s))
         }
       }
@@ -1134,10 +1310,14 @@ format.filetree <- function(x, ..., width = getOption("width")) {
   }
 
   # file patterns
-  any_file <- any(vapply(names(x$file_patterns), function(layer) {
-    spec <- x$file_patterns[[layer]]
-    !(is.null(spec) || length(spec) == 0)
-  }, logical(1)))
+  any_file <- any(vapply(
+    names(x$file_patterns),
+    function(layer) {
+      spec <- x$file_patterns[[layer]]
+      !(is.null(spec) || length(spec) == 0)
+    },
+    logical(1)
+  ))
 
   if (!any_file) {
     lines <- c(lines, "  file_patterns: <none>")
@@ -1145,10 +1325,14 @@ format.filetree <- function(x, ..., width = getOption("width")) {
     lines <- c(lines, "  file_patterns:")
     for (layer in names(x$file_patterns)) {
       spec <- x$file_patterns[[layer]]
-      if (is.null(spec) || length(spec) == 0) next
+      if (is.null(spec) || length(spec) == 0) {
+        next
+      }
       kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
       s <- paste(kv, collapse = ", ")
-      if (nchar(s) > 90) s <- paste0(substr(s, 1, 87), "\u2026")
+      if (nchar(s) > 90) {
+        s <- paste0(substr(s, 1, 87), "\u2026")
+      }
       lines <- c(lines, sprintf("    - at_layer=%s: %s", layer, s))
     }
   }
