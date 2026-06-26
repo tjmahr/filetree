@@ -210,12 +210,30 @@ ft_add_regex <- function(ft, regexes) {
     if (is.null(spec) || length(spec) == 0) {
       next
     }
-    compiled <- lapply(
-      spec$raw,
-      .ft_compile_pattern,
+    if (is.null(spec$when)) {
+      spec$when <- rep(
+        list(rlang::set_names(character(), character())),
+        length(spec$raw)
+      )
+      names(spec$when) <- names(spec$raw)
+    }
+    if (is.null(spec$with)) {
+      spec$with <- rep(
+        list(rlang::set_names(character(), character())),
+        length(spec$raw)
+      )
+      names(spec$with) <- names(spec$raw)
+    }
+    regex_pool <- lapply(
+      spec$with,
+      .ft_merge_regex_pool,
       regex_pool = ft$regex_pool
     )
+    compiled <- Map(.ft_compile_pattern, spec$raw, regex_pool)
     ft$dir_patterns[[layer]]$compiled <- compiled
+    ft$dir_patterns[[layer]]$when <- spec$when
+    ft$dir_patterns[[layer]]$with <- spec$with
+    ft$dir_patterns[[layer]]$regex_pool <- regex_pool
   }
 
   for (at_layer in names(ft$file_patterns)) {
@@ -296,6 +314,66 @@ ft_add_regex <- function(ft, regexes) {
     seen <- c(seen, candidate)
   }
   out
+}
+
+.ft_add_pattern_specs <- function(
+  existing,
+  patterns,
+  compiled,
+  when,
+  with,
+  regex_pool,
+  base_regex_pool = regex_pool
+) {
+  when_list <- rep(list(when), length(patterns))
+  names(when_list) <- names(patterns)
+  regex_pool_list <- rep(list(regex_pool), length(patterns))
+  names(regex_pool_list) <- names(patterns)
+  with_list <- rep(list(with), length(patterns))
+  names(with_list) <- names(patterns)
+
+  if (is.null(existing) || length(existing) == 0) {
+    return(list(
+      raw = patterns,
+      compiled = compiled,
+      when = when_list,
+      with = with_list,
+      regex_pool = regex_pool_list
+    ))
+  }
+
+  existing_when <- existing$when
+  if (is.null(existing_when)) {
+    existing_when <- rep(
+      list(rlang::set_names(character(), character())),
+      length(existing$raw)
+    )
+    names(existing_when) <- names(existing$raw)
+  }
+  existing_with <- existing$with
+  if (is.null(existing_with)) {
+    existing_with <- rep(
+      list(rlang::set_names(character(), character())),
+      length(existing$raw)
+    )
+    names(existing_with) <- names(existing$raw)
+  }
+  existing_regex_pool <- existing$regex_pool
+  if (is.null(existing_regex_pool)) {
+    existing_regex_pool <- rep(list(base_regex_pool), length(existing$raw))
+    names(existing_regex_pool) <- names(existing$raw)
+  }
+
+  out <- list(
+    raw = c(existing$raw, patterns),
+    compiled = c(existing$compiled, compiled),
+    when = c(existing_when, when_list),
+    with = c(existing_with, with_list),
+    regex_pool = c(existing_regex_pool, regex_pool_list)
+  )
+
+  duplicate <- duplicated(names(out$raw), fromLast = TRUE)
+  lapply(out, function(x) x[!duplicate])
 }
 
 .ft_when_matches <- function(tbl, when) {
@@ -397,6 +475,13 @@ ft_add_regex <- function(ft, regexes) {
 #' @param layer Directory layer name (must be one of the non-file layers).
 #' @param patterns Named character vector of patterns using `{placeholder}`
 #'   references that point into `ft`'s `regex_pool`.
+#' @param when Optional named character vector or named list of exact-match
+#'   conditions. A conditional directory pattern is applied only when every
+#'   condition matches an already extracted field or raw layer value with the
+#'   same name. Use a list when a condition can match any of several values.
+#' @param with Optional named character vector of pattern-local regex
+#'   definitions. These definitions override `ft`'s regex pool for this
+#'   directory pattern only.
 #' @return The updated `filetree` object.
 #' @examples
 #' root <- system.file("demo-1", package = "filetree")
@@ -411,7 +496,7 @@ ft_add_regex <- function(ft, regexes) {
 #'
 #' ft
 #' @export
-ft_add_dir_pattern <- function(ft, layer, patterns) {
+ft_add_dir_pattern <- function(ft, layer, patterns, when = NULL, with = NULL) {
   stopifnot(inherits(ft, "filetree"))
   stopifnot(
     is.character(layer),
@@ -420,9 +505,21 @@ ft_add_dir_pattern <- function(ft, layer, patterns) {
   )
 
   patterns <- .ft_normalize_patterns(patterns)
-  compiled <- lapply(patterns, .ft_compile_pattern, regex_pool = ft$regex_pool)
+  when <- .ft_normalize_when(when)
+  with <- .ft_normalize_local_regex(with)
+  regex_pool <- .ft_merge_regex_pool(with, ft$regex_pool)
+  compiled <- lapply(patterns, .ft_compile_pattern, regex_pool = regex_pool)
 
-  ft$dir_patterns[[layer]] <- list(raw = patterns, compiled = compiled)
+  existing <- ft$dir_patterns[[layer]]
+  ft$dir_patterns[[layer]] <- .ft_add_pattern_specs(
+    existing,
+    patterns,
+    compiled,
+    when,
+    with,
+    regex_pool,
+    base_regex_pool = ft$regex_pool
+  )
   ft
 }
 
@@ -482,60 +579,22 @@ ft_add_file_pattern <- function(ft, layer, patterns, when = NULL, with = NULL) {
   compiled <- lapply(patterns, .ft_compile_pattern, regex_pool = regex_pool)
 
   existing <- ft$file_patterns[[layer]]
-  existing_names <- if (is.null(existing) || length(existing) == 0) {
-    character()
-  } else {
-    names(existing$raw)
-  }
-  names(patterns) <- .ft_unique_pattern_names(names(patterns), existing_names)
-  names(compiled) <- names(patterns)
-
-  when_list <- rep(list(when), length(patterns))
-  names(when_list) <- names(patterns)
-  regex_pool_list <- rep(list(regex_pool), length(patterns))
-  names(regex_pool_list) <- names(patterns)
-  with_list <- rep(list(with), length(patterns))
-  names(with_list) <- names(patterns)
-
-  if (is.null(existing) || length(existing) == 0) {
-    ft$file_patterns[[layer]] <- list(
-      raw = patterns,
-      compiled = compiled,
-      when = when_list,
-      with = with_list,
-      regex_pool = regex_pool_list
+  if (!(is.null(existing) || length(existing) == 0)) {
+    names(patterns) <- .ft_unique_pattern_names(
+      names(patterns),
+      names(existing$raw)
     )
-  } else {
-    ft$file_patterns[[layer]]$raw <- c(existing$raw, patterns)
-    ft$file_patterns[[layer]]$compiled <- c(existing$compiled, compiled)
-    existing_when <- existing$when
-    if (is.null(existing_when)) {
-      existing_when <- rep(
-        list(rlang::set_names(character(), character())),
-        length(existing$raw)
-      )
-      names(existing_when) <- names(existing$raw)
-    }
-    ft$file_patterns[[layer]]$when <- c(existing_when, when_list)
-    existing_with <- existing$with
-    if (is.null(existing_with)) {
-      existing_with <- rep(
-        list(rlang::set_names(character(), character())),
-        length(existing$raw)
-      )
-      names(existing_with) <- names(existing$raw)
-    }
-    ft$file_patterns[[layer]]$with <- c(existing_with, with_list)
-    existing_regex_pool <- existing$regex_pool
-    if (is.null(existing_regex_pool)) {
-      existing_regex_pool <- rep(list(ft$regex_pool), length(existing$raw))
-      names(existing_regex_pool) <- names(existing$raw)
-    }
-    ft$file_patterns[[layer]]$regex_pool <- c(
-      existing_regex_pool,
-      regex_pool_list
-    )
+    names(compiled) <- names(patterns)
   }
+  ft$file_patterns[[layer]] <- .ft_add_pattern_specs(
+    existing,
+    patterns,
+    compiled,
+    when,
+    with,
+    regex_pool,
+    base_regex_pool = ft$regex_pool
+  )
   ft
 }
 
@@ -814,15 +873,25 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
     }
 
     matched <- rep(FALSE, n)
-    for (pat_nm in names(spec$compiled)) {
-      m <- stringr::str_match(raw_vals, spec$compiled[[pat_nm]])
-      m <- .ft_restore_capture_names(m, spec$compiled[[pat_nm]])
-      ok <- layer_active & !is.na(m[, 1]) & !matched
+    for (pat_i in seq_along(spec$compiled)) {
+      when <- spec$when[[pat_i]]
+      pattern_rows <- layer_active & .ft_when_matches(tbl, when)
+      if (!any(pattern_rows)) {
+        next
+      }
+
+      m <- stringr::str_match(raw_vals, spec$compiled[[pat_i]])
+      m <- .ft_restore_capture_names(m, spec$compiled[[pat_i]])
+      ok <- pattern_rows & !is.na(m[, 1]) & !matched
       if (!any(ok)) {
         next
       }
 
       cap_names <- setdiff(colnames(m), "")
+      regex_pool <- spec$regex_pool[[pat_i]]
+      if (is.null(regex_pool)) {
+        regex_pool <- ft$regex_pool
+      }
       for (cn in cap_names) {
         vals <- m[, cn]
         res <- set_capture_vec(
@@ -831,7 +900,7 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
           cn,
           vals,
           problems,
-          regex_pool = ft$regex_pool,
+          regex_pool = regex_pool,
           source_label = sprintf("directory %s", layer)
         )
         tbl <- res$tbl
@@ -973,7 +1042,11 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
 #' either a `filetree` object or the tibble returned by [ft_index()].
 #'
 #' @param x A `filetree` object or an index tibble returned by [ft_index()].
-#' @param n Maximum number of problem files to print.
+#' @param n Maximum number of problem batches to print. Batches group problem
+#'   files by `at_layer` and parent directory.
+#' @param n_lines Maximum number of problem lines to print in each batch. When
+#'   the hidden remainder would be less than 20% of the batch, all lines are
+#'   printed.
 #' @param ... Additional arguments passed to [ft_index()] when `x` is a
 #'   `filetree` object.
 #' @return A tibble containing all problem rows, invisibly.
@@ -992,9 +1065,16 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
 #'
 #' ft_glimpse_problems(ft, n = 3)
 #' @export
-ft_glimpse_problems <- function(x, n = 10, ...) {
+ft_glimpse_problems <- function(x, n = 10, n_lines = 10, ...) {
   stopifnot(is.numeric(n), length(n) == 1, !is.na(n), n >= 0)
+  stopifnot(
+    is.numeric(n_lines),
+    length(n_lines) == 1,
+    !is.na(n_lines),
+    n_lines >= 0
+  )
   n <- as.integer(n)
+  n_lines <- as.integer(n_lines)
 
   if (inherits(x, "filetree")) {
     index <- ft_index(x, ...)
@@ -1015,22 +1095,113 @@ ft_glimpse_problems <- function(x, n = 10, ...) {
     total_problems
   ))
 
-  shown <- min(problem_files, n)
-  if (problem_files > shown) {
-    cat(sprintf("Showing %d of %d problem files.\n", shown, problem_files))
+  batches <- .ft_problem_batches(problem_rows)
+  total_batches <- length(batches)
+  shown <- .ft_preview_count(total_batches, n)
+  if (total_batches > shown) {
+    cat(sprintf("Showing %d of %d problem batches.\n", shown, total_batches))
   }
 
   if (shown > 0) {
     for (i in seq_len(shown)) {
+      batch <- batches[[i]]
       cat("\n")
-      cat(as.character(problem_rows$.rel[[i]]), "\n", sep = "")
-      for (problem in problem_rows$.problems[[i]]) {
-        cli::cli_bullets(c("*" = problem))
+      cat(batch$label, "\n", sep = "")
+
+      lines <- batch$lines
+      shown_lines <- .ft_preview_count(nrow(lines), n_lines)
+      if (shown_lines > 0) {
+        for (j in seq_len(shown_lines)) {
+          cli::cli_bullets(c(
+            "*" = paste0(lines$name[[j]], ": ", lines$problem[[j]])
+          ))
+        }
+      }
+
+      hidden <- nrow(lines) - shown_lines
+      if (hidden > 0) {
+        cat(sprintf("[... %d more problems]\n", hidden))
       }
     }
   }
 
   invisible(problem_rows)
+}
+
+.ft_preview_count <- function(total, n) {
+  shown <- min(total, n)
+  hidden <- total - shown
+  if (hidden > 0 && hidden < total * 0.2) {
+    return(total)
+  }
+  shown
+}
+
+.ft_problem_batches <- function(problem_rows) {
+  if (nrow(problem_rows) == 0) {
+    return(list())
+  }
+
+  at_layer <- if ("at_layer" %in% names(problem_rows)) {
+    problem_rows$at_layer
+  } else {
+    rep(NA_character_, nrow(problem_rows))
+  }
+  parent <- vapply(problem_rows$.rel, .ft_problem_parent_dir, character(1))
+  key <- paste(at_layer, parent, sep = "\r")
+  groups <- split(seq_len(nrow(problem_rows)), factor(key, levels = unique(key)))
+
+  lapply(groups, function(idx) {
+    layer <- at_layer[[idx[[1]]]]
+    if (is.na(layer) || !nzchar(layer)) {
+      layer <- "<unknown>"
+    }
+    dir <- parent[[idx[[1]]]]
+    label <- sprintf("%s (`%s` layer)", dir, layer)
+
+    lines <- do.call(rbind, lapply(idx, function(i) {
+      data.frame(
+        name = rep(
+          .ft_problem_file_label(problem_rows$.rel[[i]], dir),
+          length(problem_rows$.problems[[i]])
+        ),
+        problem = .ft_format_problem_line(problem_rows$.problems[[i]]),
+        stringsAsFactors = FALSE
+      )
+    }))
+
+    list(label = label, lines = lines)
+  })
+}
+
+.ft_problem_parent_dir <- function(path) {
+  parent <- dirname(chartr("\\", "/", as.character(path)))
+  if (identical(parent, ".") || !nzchar(parent)) {
+    return("<root>")
+  }
+  parent
+}
+
+.ft_problem_file_label <- function(path, parent) {
+  path <- chartr("\\", "/", as.character(path))
+  if (identical(parent, "<root>")) {
+    return(path)
+  }
+
+  prefix <- paste0(parent, "/")
+  if (startsWith(path, prefix)) {
+    return(substring(path, nchar(prefix) + 1L))
+  }
+
+  basename(path)
+}
+
+.ft_format_problem_line <- function(problem) {
+  sub(
+    "^filename '[^']+' does not match ",
+    "filename does not match ",
+    as.character(problem)
+  )
 }
 
 .ft_validate_index <- function(index) {
@@ -1130,7 +1301,32 @@ ft_schema_tree <- function(ft) {
   if (is.null(spec) || length(spec) == 0) {
     return(paste0(layer, ": <none>"))
   }
-  paste0(layer, ": ", paste(unname(spec$raw), collapse = " | "))
+
+  pattern_labels <- character(length(spec$raw))
+  for (i in seq_along(spec$raw)) {
+    nm <- names(spec$raw)[[i]]
+    pattern_label <- if (identical(nm, "default") && length(spec$raw) == 1) {
+      unname(spec$raw[[i]])
+    } else {
+      paste0(nm, " = ", unname(spec$raw[[i]]))
+    }
+    annotations <- c(
+      .ft_format_when_annotation(spec$when[[i]]),
+      .ft_format_with_annotation(spec$with[[i]])
+    )
+    annotations <- annotations[nzchar(annotations)]
+    if (length(annotations)) {
+      pattern_label <- paste0(
+        pattern_label,
+        " [",
+        paste(annotations, collapse = "; "),
+        "]"
+      )
+    }
+    pattern_labels[[i]] <- pattern_label
+  }
+
+  paste0(layer, ": ", paste(pattern_labels, collapse = " | "))
 }
 
 .ft_format_file_schema <- function(ft, layer) {

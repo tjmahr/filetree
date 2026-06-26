@@ -471,6 +471,108 @@ test_that("File patterns can use pattern-local regex definitions", {
   expect_false("task_three" %in% names(index))
 })
 
+test_that("Directory patterns can be conditional on parent layer values", {
+  root <- fs::path_temp("filetree-conditional-dir")
+  ft_conditional <- ft_init(root, c("site", "subject", "data")) |>
+    ft_add_regex(c(
+      site = "lab-a|lab-b",
+      subject = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("site", "{site}") |>
+    ft_add_dir_pattern(
+      "subject",
+      c(lab_a = "a-{subject}"),
+      when = c(site = "lab-a")
+    ) |>
+    ft_add_dir_pattern(
+      "subject",
+      c(lab_b = "b-{subject}"),
+      when = c(site = "lab-b")
+    ) |>
+    ft_add_file_pattern("data", "{task}.txt")
+
+  index <- ft_index(
+    ft_conditional,
+    fs::path(root, c(
+      "lab-a/a-01/red.txt",
+      "lab-b/b-02/green.txt",
+      "lab-a/b-03/red.txt"
+    ))
+  )
+
+  expect_equal(index$.ok, c(TRUE, TRUE, FALSE))
+  expect_equal(index$subject, c("01", "02", NA))
+  expect_equal(
+    index$.problems[[3]][[1]],
+    "directory name 'b-03' does not match a dir pattern at layer `subject`"
+  )
+})
+
+test_that("Directory patterns can use pattern-local regex definitions", {
+  root <- fs::path_temp("filetree-local-dir-regex")
+  ft_local <- ft_init(root, c("site", "subject", "data")) |>
+    ft_add_regex(c(
+      site = "lab-a|lab-b",
+      subject = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("site", "{site}") |>
+    ft_add_dir_pattern(
+      "subject",
+      c(lab_a = "{subject}"),
+      when = c(site = "lab-a")
+    ) |>
+    ft_add_dir_pattern(
+      "subject",
+      c(lab_b = "{subject}"),
+      when = c(site = "lab-b"),
+      with = c(subject = "[A-Z]{2}")
+    ) |>
+    ft_add_file_pattern("data", "{task}.txt")
+
+  index <- ft_index(
+    ft_local,
+    fs::path(root, c(
+      "lab-a/01/red.txt",
+      "lab-b/AB/green.txt",
+      "lab-b/03/red.txt"
+    ))
+  )
+
+  expect_equal(index$.ok, c(TRUE, TRUE, FALSE))
+  expect_equal(index$subject, c("01", "AB", NA))
+  expect_true(any(grepl("does not match a dir pattern at layer `subject`", index$.problems[[3]], fixed = TRUE)))
+})
+
+test_that("Directory pattern-local regex definitions survive global regex updates", {
+  root <- fs::path_temp("filetree-local-dir-regex-recompile")
+  ft_local <- ft_init(root, c("site", "subject", "data")) |>
+    ft_add_regex(c(
+      site = "lab-a|lab-b",
+      subject = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("site", "{site}") |>
+    ft_add_dir_pattern(
+      "subject",
+      c(lab_b = "{subject}"),
+      when = c(site = "lab-b"),
+      with = c(subject = "[A-Z]{2}")
+    ) |>
+    ft_add_file_pattern("data", "{task}.txt")
+
+  ft_local <- ft_local |> ft_add_regex(c(subject = "\\d{3}"))
+
+  index <- ft_index(
+    ft_local,
+    fs::path(root, c("lab-b/AB/red.txt", "lab-b/123/green.txt"))
+  )
+
+  expect_equal(index$.ok, c(TRUE, FALSE))
+  expect_equal(index$subject, c("AB", NA))
+})
+
 test_that("Pattern-local regex definitions survive global regex updates", {
   root <- fs::path_temp("filetree-local-regex-recompile")
   ft_local <- ft_init(root, c("subject", "time", "data")) |>
@@ -561,8 +663,8 @@ test_that("Problem glimpses render problems with cli bullets", {
   )
 
   expect_s3_class(result, "tbl_df")
-  expect_true(any(grepl("* filename has", msg, fixed = TRUE)))
-  expect_false(any(grepl("- filename has", msg, fixed = TRUE)))
+  expect_true(any(grepl("* a.txt: filename has", msg, fixed = TRUE)))
+  expect_false(any(grepl("- a.txt: filename has", msg, fixed = TRUE)))
   expect_true(any(grepl("1/1 files with 1 problems.", out, fixed = TRUE)))
 })
 
@@ -630,7 +732,8 @@ test_that("File patterns at parent layers validate sidecar files", {
 
 test_that("Problem glimpses print a compact summary from an index", {
   index <- tibble::tibble(
-    .rel = c("a.txt", "b.txt", "c.txt"),
+    .rel = c("dir-a/a.txt", "dir-b/b.txt", "dir-a/c.txt"),
+    at_layer = c("data", "data", "data"),
     .ok = c(FALSE, FALSE, TRUE),
     .problems = list(
       c("first problem", "second problem"),
@@ -641,18 +744,82 @@ test_that("Problem glimpses print a compact summary from an index", {
 
   out <- utils::capture.output(
     msg <- utils::capture.output(
-      result <- ft_glimpse_problems(index, n = 1),
+      result <- ft_glimpse_problems(index, n = 1, n_lines = 1),
       type = "message"
     )
   )
 
   expect_s3_class(result, "tbl_df")
-  expect_equal(result$.rel, c("a.txt", "b.txt"))
+  expect_equal(result$.rel, c("dir-a/a.txt", "dir-b/b.txt"))
   expect_true(any(grepl("2/3 files with 3 problems.", out, fixed = TRUE)))
-  expect_true(any(grepl("Showing 1 of 2 problem files.", out, fixed = TRUE)))
-  expect_true(any(grepl("a.txt", out, fixed = TRUE)))
-  expect_true(any(grepl("* first problem", msg, fixed = TRUE)))
-  expect_false(any(grepl("b.txt", out, fixed = TRUE)))
+  expect_true(any(grepl("Showing 1 of 2 problem batches.", out, fixed = TRUE)))
+  expect_true(any(grepl("dir-a (`data` layer)", out, fixed = TRUE)))
+  expect_true(any(grepl("* a.txt: first problem", msg, fixed = TRUE)))
+  expect_true(any(grepl("[... 1 more problems]", out, fixed = TRUE)))
+  expect_false(any(grepl("dir-b", out, fixed = TRUE)))
+})
+
+test_that("Problem glimpses show small remainders instead of truncating", {
+  index <- tibble::tibble(
+    .rel = paste0("dir-", 1:6, "/bad.txt"),
+    at_layer = rep("data", 6),
+    .ok = rep(FALSE, 6),
+    .problems = as.list(paste("problem", 1:6))
+  )
+
+  out <- utils::capture.output(
+    msg <- utils::capture.output(
+      ft_glimpse_problems(index, n = 5, n_lines = 10),
+      type = "message"
+    )
+  )
+
+  expect_false(any(grepl("Showing 5 of 6 problem batches.", out, fixed = TRUE)))
+  expect_true(any(grepl("dir-6 (`data` layer)", out, fixed = TRUE)))
+  expect_true(any(grepl("* bad.txt: problem 6", msg, fixed = TRUE)))
+
+  one_batch <- tibble::tibble(
+    .rel = "dir-a/bad.txt",
+    at_layer = "data",
+    .ok = FALSE,
+    .problems = list(paste("problem", 1:6))
+  )
+
+  out <- utils::capture.output(
+    msg <- utils::capture.output(
+      ft_glimpse_problems(one_batch, n = 1, n_lines = 5),
+      type = "message"
+    )
+  )
+
+  expect_false(any(grepl("[... 1 more problems]", out, fixed = TRUE)))
+  expect_true(any(grepl("* bad.txt: problem 6", msg, fixed = TRUE)))
+})
+
+test_that("Problem glimpses do not repeat filenames inside filename messages", {
+  index <- tibble::tibble(
+    .rel = "ab-02/day02/ab-02_02_yellow.txt",
+    at_layer = "data",
+    .ok = FALSE,
+    .problems = list(
+      "filename 'ab-02_02_yellow.txt' does not match a file pattern at layer `data`"
+    )
+  )
+
+  out <- utils::capture.output(
+    msg <- utils::capture.output(
+      ft_glimpse_problems(index, n = 1, n_lines = 1),
+      type = "message"
+    )
+  )
+
+  expect_true(any(grepl("ab-02/day02 (`data` layer)", out, fixed = TRUE)))
+  expect_true(any(grepl(
+    "* ab-02_02_yellow.txt: filename does not match a file pattern at layer `data`",
+    msg,
+    fixed = TRUE
+  )))
+  expect_false(any(grepl("filename 'ab-02_02_yellow.txt'", msg, fixed = TRUE)))
 })
 
 test_that("Problem glimpses can index a filetree", {
@@ -707,6 +874,37 @@ test_that("Schema trees format layers and conditional file patterns", {
   expect_true(any(grepl("time: day{time}", lines, fixed = TRUE)))
   expect_true(any(grepl("`data` file: default = {subject}_{time}_{task}.txt [when time in 01, 02]", lines, fixed = TRUE)))
   expect_true(any(grepl("`data` file: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]", lines, fixed = TRUE)))
+})
+
+test_that("Schema trees format conditional directory patterns", {
+  ft_schema <- ft_init("demo-root", c("site", "subject", "data")) |>
+    ft_add_regex(c(
+      site = "lab-a|lab-b",
+      subject = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("site", "{site}") |>
+    ft_add_dir_pattern(
+      "subject",
+      c(lab_a = "a-{subject}"),
+      when = c(site = "lab-a")
+    ) |>
+    ft_add_dir_pattern(
+      "subject",
+      c(lab_b = "{subject}"),
+      when = c(site = "lab-b"),
+      with = c(subject = "[A-Z]{2}")
+    ) |>
+    ft_add_file_pattern("data", "{task}.txt")
+
+  lines <- ft_format_schema_tree(ft_schema)
+
+  expect_true(any(grepl("site: {site}", lines, fixed = TRUE)))
+  expect_true(any(grepl(
+    "subject: lab_a = a-{subject} [when site == lab-a] | lab_b = {subject} [when site == lab-b; with subject = [A-Z]{2}]",
+    lines,
+    fixed = TRUE
+  )))
 })
 
 test_that("Schema trees show file patterns registered on parent layers", {

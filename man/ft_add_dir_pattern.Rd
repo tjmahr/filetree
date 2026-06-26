@@ -4,7 +4,7 @@
 \alias{ft_add_dir_pattern}
 \title{Register directory name patterns for a layer}
 \usage{
-ft_add_dir_pattern(ft, layer, patterns)
+ft_add_dir_pattern(ft, layer, patterns, when = NULL, with = NULL)
 }
 \arguments{
 \item{ft}{A \code{filetree} object.}
@@ -13,6 +13,15 @@ ft_add_dir_pattern(ft, layer, patterns)
 
 \item{patterns}{Named character vector of patterns using \code{{placeholder}}
 references that point into \code{ft}'s \code{regex_pool}.}
+
+\item{when}{Optional named character vector or named list of exact-match
+conditions. A conditional directory pattern is applied only when every
+condition matches an already extracted field or raw layer value with the
+same name. Use a list when a condition can match any of several values.}
+
+\item{with}{Optional named character vector of pattern-local regex
+definitions. These definitions override \code{ft}'s regex pool for this
+directory pattern only.}
 }
 \value{
 The updated \code{filetree} object.

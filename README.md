@@ -71,7 +71,7 @@ ft <- ft_init(
   layers = c("subject", "time", "data")
 )
 ft
-#> <filetree> root: C:/Users/trist/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: <empty>
@@ -104,7 +104,7 @@ ft <- ft |>
     patterns = "{subject}_{task}.txt"
   )
 ft
-#> <filetree> root: C:/Users/trist/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: 3 (subject, time, task)
@@ -119,7 +119,7 @@ We can also view the filetree schema as a tree:
 
 ``` r
 ft |> ft_schema_tree()
-#> C:/Users/trist/Documents/GitRepos/filetree/inst/demo-1
+#> C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
 #> └── subject: {subject}
 #>     └── time: {time}
 #>         └── `data` file: {subject}_{task}.txt
@@ -204,17 +204,18 @@ ft |>
   ft_glimpse_problems()
 #> 4/11 files with 4 problems.
 #> 
-#> ab-01/day01/ab-01_blue.txt
-#> • filename 'ab-01_blue.txt' does not match a file pattern at layer `data`
+#> ab-01/day01 (`data` layer)
+#> • ab-01_blue.txt: filename does not match a file pattern at layer `data`
 #> 
-#> ab-01/day02/ac-01_red.txt
-#> • filename has `subject` "ac-01", but a parent directory has `subject` "ab-01"
+#> ab-01/day02 (`data` layer)
+#> • ac-01_red.txt: filename has `subject` "ac-01", but a parent directory has
+#>   `subject` "ab-01"
 #> 
-#> ac-02/day3/ac-02_green.txt
-#> • directory name 'day3' does not match a dir pattern at layer `time`
-#> 
-#> ac-02/day3/ac-02_red.txt
-#> • directory name 'day3' does not match a dir pattern at layer `time`
+#> ac-02/day3 (`data` layer)
+#> • ac-02_green.txt: directory name 'day3' does not match a dir pattern at layer
+#>   `time`
+#> • ac-02_red.txt: directory name 'day3' does not match a dir pattern at layer
+#>   `time`
 ```
 
 ### Pattern consistency and conditional patterns
@@ -293,7 +294,7 @@ In the tree view, we can see multiple file patterns in the `data` layer:
 
 ``` r
 ft_schema_tree(ft)
-#> C:/Users/trist/Documents/GitRepos/filetree/inst/demo-3
+#> C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
 #>     ├── `time` file: {subject}-manifest.txt
 #>     └── time: day{time}
@@ -309,27 +310,28 @@ ft |>
   ft_glimpse_problems()
 #> 5/13 files with 5 problems.
 #> 
-#> ab-01/day02/ab-01_01_green.txt
-#> • filename has `time` "01", but a parent directory has `time` "02"
+#> ab-01/day02 (`data` layer)
+#> • ab-01_01_green.txt: filename has `time` "01", but a parent directory has
+#>   `time` "02"
+#> • ab-01_01_red.txt: filename has `time` "01", but a parent directory has `time`
+#>   "02"
 #> 
-#> ab-01/day02/ab-01_01_red.txt
-#> • filename has `time` "01", but a parent directory has `time` "02"
+#> ab-02 (`time` layer)
+#> • aa-02-manifest.txt: filename has `subject` "aa-02", but a parent directory
+#>   has `subject` "ab-02"
 #> 
-#> ab-02/aa-02-manifest.txt
-#> • filename has `subject` "aa-02", but a parent directory has `subject` "ab-02"
+#> ab-02/day02 (`data` layer)
+#> • ab-02_02_yellow.txt: filename does not match a file pattern at layer `data`
 #> 
-#> ab-02/day02/ab-02_02_yellow.txt
-#> • filename 'ab-02_02_yellow.txt' does not match a file pattern at layer `data`
-#> 
-#> ab-02/day03/ab-02_03_green.txt
-#> • filename 'ab-02_03_green.txt' does not match a file pattern at layer `data`
+#> ab-02/day03 (`data` layer)
+#> • ab-02_03_green.txt: filename does not match a file pattern at layer `data`
 ```
 
 When the ft is complex, we can print out a tree-like version:
 
 ``` r
 ft_schema_tree(ft)
-#> C:/Users/trist/Documents/GitRepos/filetree/inst/demo-3
+#> C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
 #>     ├── `time` file: {subject}-manifest.txt
 #>     └── time: day{time}
@@ -346,7 +348,7 @@ ft |>
   dplyr::glimpse()
 #> Rows: 13
 #> Columns: 12
-#> $ .path          <fs::path> "C:/Users/trist/Documents/GitRepos/filetree/inst/d…
+#> $ .path          <fs::path> "C:/Users/Tristan/Documents/GitRepos/filetree/inst…
 #> $ .rel           <fs::path> "ab-01/ab-01-manifest.txt", "ab-01/day01/ab-01_01_…
 #> $ at_layer       <chr> "time", "data", "data", "data", "data", "data", "time",…
 #> $ layer__subject <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "…

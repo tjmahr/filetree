@@ -4,12 +4,17 @@
 \alias{ft_glimpse_problems}
 \title{Glimpse filetree indexing problems}
 \usage{
-ft_glimpse_problems(x, n = 10, ...)
+ft_glimpse_problems(x, n = 10, n_lines = 10, ...)
 }
 \arguments{
 \item{x}{A \code{filetree} object or an index tibble returned by \code{\link[=ft_index]{ft_index()}}.}
 
-\item{n}{Maximum number of problem files to print.}
+\item{n}{Maximum number of problem batches to print. Batches group problem
+files by \code{at_layer} and parent directory.}
+
+\item{n_lines}{Maximum number of problem lines to print in each batch. When
+the hidden remainder would be less than 20\% of the batch, all lines are
+printed.}
 
 \item{...}{Additional arguments passed to \code{\link[=ft_index]{ft_index()}} when \code{x} is a
 \code{filetree} object.}

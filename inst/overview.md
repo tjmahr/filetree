@@ -34,8 +34,8 @@ design favors explicit schemas and inspectable output over hidden conventions.
   components with different values.
 - Support partial schemas during exploration, with strict mode available when
   missing file patterns should become problems.
-- Support conditional file patterns through parent-layer values and
-  pattern-local regex overrides.
+- Support conditional directory and file patterns through already extracted
+  values and pattern-local regex overrides.
 - Provide compact human-facing diagnostics for problem files.
 - Make schemas inspectable through text summaries and tree-shaped output.
 
@@ -108,7 +108,7 @@ placeholder names after matching.
 Regex pool entries may reference other pool entries using the same placeholder
 syntax. Recursive expansion is validated for missing names and cycles.
 
-File patterns can also include:
+Directory and file patterns can also include:
 
 - `when`: exact-match conditions on already extracted fields or raw
   `layer__<name>` values.
@@ -116,7 +116,8 @@ File patterns can also include:
   changing the global regex pool.
 
 This supports cases such as ordinary files on days 1 and 2, but a different
-allowed task value on day 3.
+allowed task value on day 3, or different directory naming conventions under
+different parent directories.
 
 ## Indexing Flow
 
@@ -170,6 +171,11 @@ Problem messages are stored as strings in `.problems`. Some messages include
 `ft_glimpse_problems()` can render semantic terminal output with
 `cli::cli_bullets()`.
 
+`ft_glimpse_problems()` groups printed problems by parent directory and
+`at_layer`. The `n` argument controls how many problem batches are previewed,
+and `n_lines` controls how many problem lines are printed within each batch.
+Small hidden remainders are printed in full instead of summarized.
+
 Important diagnostic categories include:
 
 - paths deeper than the declared layers;
@@ -201,7 +207,7 @@ exercise:
 - problem detection in malformed demo trees;
 - regex pool recursion, recompilation, missing references, and cycle errors;
 - partial schemas and `strict = TRUE`;
-- conditional file patterns and pattern-local regex overrides;
+- conditional directory and file patterns and pattern-local regex overrides;
 - placeholder names with underscores;
 - user-facing problem messages;
 - sidecar files registered on parent layers;
