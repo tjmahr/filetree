@@ -14,6 +14,8 @@ Track grouping `ft_glimpse_problems()` output by parent directory and layer.
 - [x] Print all remaining items when the hidden remainder is less than 20%.
 - [x] Shorten problem lines by printing file names relative to the batch
   directory and removing repeated filenames from filename-match messages.
+- [x] Avoid materializing every batch and every problem line when only a small
+  preview is requested.
 - [x] Refresh generated documentation.
 - [x] Run local regression tests.
 
@@ -46,3 +48,6 @@ preview, and summarize hidden problems with `[..., n more problems]`.
 
 **Verification:** `devtools::check(document = FALSE)` passes with
 `0 errors | 0 warnings | 0 notes`.
+
+**Performance check:** Synthetic 200,000-row problem indexes take about
+0.34-0.36 seconds elapsed for `ft_glimpse_problems(n = 1, n_lines = 10)`.

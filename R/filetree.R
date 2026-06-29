@@ -1095,8 +1095,8 @@ ft_glimpse_problems <- function(x, n = 10, n_lines = 10, ...) {
     total_problems
   ))
 
-  batches <- .ft_problem_batches(problem_rows)
-  total_batches <- length(batches)
+  batches <- .ft_problem_batch_index(problem_rows)
+  total_batches <- batches$total
   shown <- .ft_preview_count(total_batches, n)
   if (total_batches > shown) {
     cat(sprintf("Showing %d of %d problem batches.\n", shown, total_batches))
@@ -1104,21 +1104,21 @@ ft_glimpse_problems <- function(x, n = 10, n_lines = 10, ...) {
 
   if (shown > 0) {
     for (i in seq_len(shown)) {
-      batch <- batches[[i]]
+      batch <- .ft_problem_batch(problem_rows, batches, i)
       cat("\n")
       cat(batch$label, "\n", sep = "")
 
-      lines <- batch$lines
-      shown_lines <- .ft_preview_count(nrow(lines), n_lines)
+      shown_lines <- .ft_preview_count(batch$total_lines, n_lines)
       if (shown_lines > 0) {
-        for (j in seq_len(shown_lines)) {
+        lines <- .ft_problem_batch_lines(problem_rows, batch, shown_lines)
+        for (j in seq_along(lines$name)) {
           cli::cli_bullets(c(
             "*" = paste0(lines$name[[j]], ": ", lines$problem[[j]])
           ))
         }
       }
 
-      hidden <- nrow(lines) - shown_lines
+      hidden <- batch$total_lines - shown_lines
       if (hidden > 0) {
         cat(sprintf("[... %d more problems]\n", hidden))
       }
@@ -1137,9 +1137,9 @@ ft_glimpse_problems <- function(x, n = 10, n_lines = 10, ...) {
   shown
 }
 
-.ft_problem_batches <- function(problem_rows) {
+.ft_problem_batch_index <- function(problem_rows) {
   if (nrow(problem_rows) == 0) {
-    return(list())
+    return(list(total = 0L))
   }
 
   at_layer <- if ("at_layer" %in% names(problem_rows)) {
@@ -1147,38 +1147,67 @@ ft_glimpse_problems <- function(x, n = 10, n_lines = 10, ...) {
   } else {
     rep(NA_character_, nrow(problem_rows))
   }
-  parent <- vapply(problem_rows$.rel, .ft_problem_parent_dir, character(1))
+  parent <- .ft_problem_parent_dir(problem_rows$.rel)
   key <- paste(at_layer, parent, sep = "\r")
-  groups <- split(seq_len(nrow(problem_rows)), factor(key, levels = unique(key)))
+  unique_key <- unique(key)
+  group <- match(key, unique_key)
+  first <- match(unique_key, key)
 
-  lapply(groups, function(idx) {
-    layer <- at_layer[[idx[[1]]]]
-    if (is.na(layer) || !nzchar(layer)) {
-      layer <- "<unknown>"
+  list(
+    total = length(unique_key),
+    group = group,
+    at_layer = at_layer,
+    parent = parent,
+    first = first
+  )
+}
+
+.ft_problem_batch <- function(problem_rows, batches, i) {
+  idx <- which(batches$group == i)
+  first <- batches$first[[i]]
+  layer <- batches$at_layer[[first]]
+  if (is.na(layer) || !nzchar(layer)) {
+    layer <- "<unknown>"
+  }
+  dir <- batches$parent[[first]]
+
+  list(
+    idx = idx,
+    parent = dir,
+    label = sprintf("%s (`%s` layer)", dir, layer),
+    total_lines = sum(lengths(problem_rows$.problems[idx]))
+  )
+}
+
+.ft_problem_batch_lines <- function(problem_rows, batch, n) {
+  name <- character()
+  problem <- character()
+
+  for (i in batch$idx) {
+    row_problems <- problem_rows$.problems[[i]]
+    remaining <- n - length(problem)
+    if (remaining <= 0) {
+      break
     }
-    dir <- parent[[idx[[1]]]]
-    label <- sprintf("%s (`%s` layer)", dir, layer)
-
-    lines <- do.call(rbind, lapply(idx, function(i) {
-      data.frame(
-        name = rep(
-          .ft_problem_file_label(problem_rows$.rel[[i]], dir),
-          length(problem_rows$.problems[[i]])
-        ),
-        problem = .ft_format_problem_line(problem_rows$.problems[[i]]),
-        stringsAsFactors = FALSE
+    if (length(row_problems) > remaining) {
+      row_problems <- row_problems[seq_len(remaining)]
+    }
+    problem <- c(problem, .ft_format_problem_line(row_problems))
+    name <- c(
+      name,
+      rep(
+        .ft_problem_file_label(problem_rows$.rel[[i]], batch$parent),
+        length(row_problems)
       )
-    }))
+    )
+  }
 
-    list(label = label, lines = lines)
-  })
+  list(name = name, problem = problem)
 }
 
 .ft_problem_parent_dir <- function(path) {
   parent <- dirname(chartr("\\", "/", as.character(path)))
-  if (identical(parent, ".") || !nzchar(parent)) {
-    return("<root>")
-  }
+  parent[parent == "." | !nzchar(parent)] <- "<root>"
   parent
 }
 
