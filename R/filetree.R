@@ -427,16 +427,40 @@ ft_add_regex <- function(ft, regexes) {
 }
 
 .ft_resolve_file_layers <- function(tbl, ft, active) {
-  layer_cols <- paste0("layer__", ft$layers)
+  layers <- ft$layers
+  parent_layers <- layers[-length(layers)]
+  has_parent_file_patterns <- any(vapply(
+    parent_layers,
+    .ft_has_file_patterns,
+    logical(1),
+    ft = ft
+  ))
+  if (!has_parent_file_patterns) {
+    return(tbl)
+  }
+
+  layer_cols <- paste0("layer__", layers)
   dir_layer_cols <- layer_cols[-length(layer_cols)]
   fname <- tbl[[layer_cols[[length(layer_cols)]]]]
+  n_dirs <- if (length(dir_layer_cols)) {
+    rowSums(!is.na(tbl[, dir_layer_cols, drop = FALSE]))
+  } else {
+    rep(0L, nrow(tbl))
+  }
 
-  for (j in which(active)) {
-    n_dir <- if (length(dir_layer_cols)) {
-      sum(!is.na(unlist(tbl[j, dir_layer_cols, drop = FALSE])))
-    } else {
-      0L
-    }
+  parent_has_patterns <- rep(FALSE, nrow(tbl))
+  candidate_n_dir <- which(n_dirs >= 1L & n_dirs < length(layers))
+  if (length(candidate_n_dir)) {
+    parent_has_patterns[candidate_n_dir] <- vapply(
+      layers[n_dirs[candidate_n_dir]],
+      .ft_has_file_patterns,
+      logical(1),
+      ft = ft
+    )
+  }
+
+  for (j in which(active & parent_has_patterns)) {
+    n_dir <- n_dirs[[j]]
     candidates <- .ft_candidate_file_layers(ft, n_dir)
     if (!length(candidates)) {
       next
@@ -605,7 +629,7 @@ ft_add_file_pattern <- function(ft, layer, patterns, when = NULL, with = NULL) {
 #' Return all files under the filetree root using the configured `fs` helper.
 #'
 #' @param ft A `filetree` object.
-#' @return Character vector of file paths relative to the working directory.
+#' @return An `fs_path` character vector of file paths under `ft$root`.
 #' @examples
 #' root <- system.file("demo-1", package = "filetree")
 #'
@@ -686,8 +710,9 @@ ft_list <- function(ft) {
 #' @param strict Logical. If `TRUE`, files at layers without registered file
 #'   patterns are reported as problems. If `FALSE`, missing file patterns are
 #'   accepted so partial schemas can be used for exploratory indexing.
-#' @return A tibble with layer columns (`layer__<name>`), captured placeholders,
-#'   the matched pattern name, `.ok` flag, and `.problems` list-column.
+#' @return A tibble with `.path`, `.rel`, `at_layer`, layer columns
+#'   (`layer__<name>`), captured placeholders, the matched pattern name, `.ok`
+#'   flag, and `.problems` list-column.
 #' @examples
 #' root <- system.file("demo-1", package = "filetree")
 #'
@@ -718,8 +743,8 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   stopifnot(inherits(ft, "filetree"))
   stopifnot(is.logical(strict), length(strict) == 1, !is.na(strict))
 
-  rel <- fs::path_rel(files, start = ft$root)
-  parts_list <- strsplit(rel, .Platform$file.sep, fixed = TRUE)
+  rel <- .ft_path_rel(files, ft$root)
+  parts_list <- strsplit(rel, "/", fixed = TRUE)
 
   layers <- ft$layers
   dir_layers <- if (length(layers) >= 2) {
@@ -743,16 +768,22 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
 
   for (i in seq_along(parts_list)) {
     parts <- parts_list[[i]]
-    fname <- utils::tail(parts, 1)
+    n_parts <- length(parts)
+    fname <- parts[[n_parts]]
 
-    n_dir <- max(length(parts) - 1L, 0L)
+    n_dir <- max(n_parts - 1L, 0L)
     if (n_dir > 0L && length(dir_layers) > 0L) {
       n_fill <- min(n_dir, length(dir_layers))
       layer_mat[i, seq_len(n_fill)] <- parts[seq_len(n_fill)]
     }
     layer_mat[i, length(layers)] <- fname
 
-    at_layer[[i]] <- .ft_at_layer_from_parts(ft, parts)
+    idx <- n_dir + 1L
+    at_layer[[i]] <- if (idx > length(layers)) {
+      ".__too_deep__"
+    } else {
+      layers[[idx]]
+    }
   }
 
   tbl <- tibble::tibble(
@@ -1034,6 +1065,20 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   tbl <- tbl[, c(core, extracted, diag)]
 
   tbl
+}
+
+.ft_path_rel <- function(files, root) {
+  files_chr <- chartr("\\", "/", as.character(files))
+  root_chr <- chartr("\\", "/", as.character(root))
+  root_chr <- sub("/+$", "", root_chr)
+  prefix <- paste0(root_chr, "/")
+
+  under_root <- startsWith(files_chr, prefix)
+  if (all(under_root)) {
+    return(substring(files_chr, nchar(prefix) + 1L))
+  }
+
+  as.character(fs::path_rel(files, start = root))
 }
 
 #' Glimpse filetree indexing problems

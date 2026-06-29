@@ -17,8 +17,9 @@ patterns are reported as problems. If \code{FALSE}, missing file patterns are
 accepted so partial schemas can be used for exploratory indexing.}
 }
 \value{
-A tibble with layer columns (\verb{layer__<name>}), captured placeholders,
-the matched pattern name, \code{.ok} flag, and \code{.problems} list-column.
+A tibble with \code{.path}, \code{.rel}, \code{at_layer}, layer columns
+(\verb{layer__<name>}), captured placeholders, the matched pattern name, \code{.ok}
+flag, and \code{.problems} list-column.
 }
 \description{
 Validate file paths against the configured directory and file-name patterns,

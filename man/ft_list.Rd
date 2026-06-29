@@ -10,7 +10,7 @@ ft_list(ft)
 \item{ft}{A \code{filetree} object.}
 }
 \value{
-Character vector of file paths relative to the working directory.
+An \code{fs_path} character vector of file paths under \code{ft$root}.
 }
 \description{
 Return all files under the filetree root using the configured \code{fs} helper.

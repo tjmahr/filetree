@@ -146,6 +146,12 @@ sequenceDiagram
 relative path into components, and fills raw `layer__<name>` columns. It assigns
 an initial `at_layer` from path depth with `.ft_at_layer_from_parts()`.
 
+For performance, `ft_index()` uses a fast relative-path path when supplied files
+are already under `ft$root`, and falls back to `fs::path_rel()` only for paths
+outside that direct prefix. File-layer resolution is skipped unless an
+immediate parent layer has registered file patterns, which avoids row-wise
+sidecar checks for ordinary data-file trees.
+
 Directory patterns are applied before file patterns. This matters because file
 patterns may depend on parent metadata through `when`, and because file captures
 are checked against values already extracted from parent directories.
@@ -192,8 +198,8 @@ the declared schema. Directory layers are shown in order. File patterns are
 shown in the parent directory where files for that layer live, using labels
 such as `` `time` file:`` and `` `data` file:``. This keeps sidecar files
 visually distinct from child directories while still making the owning layer
-explicit. Conditional file patterns include `when` annotations, and
-pattern-local regex overrides include `with` annotations.
+explicit. Conditional directory and file patterns include `when` annotations,
+and pattern-local regex overrides include `with` annotations.
 
 The R source uses Unicode escape sequences for tree branches rather than literal
 box-drawing characters so the package source remains ASCII-only.

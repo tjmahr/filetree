@@ -139,19 +139,19 @@ ft |> ft_list() |> fs::path_rel()
 
 ft |> ft_index()
 #> # A tibble: 11 × 12
-#>    .path      .rel       at_layer layer__subject layer__time layer__data subject
-#>    <fs::path> <fs::path> <chr>    <chr>          <chr>       <chr>       <chr>  
-#>  1 …green.txt …green.txt data     ab-01          day01       ab-01_gree… ab-01  
-#>  2 …1_red.txt …1_red.txt data     ab-01          day01       ab-01_red.… ab-01  
-#>  3 …green.txt …green.txt data     ab-01          day02       ab-01_gree… ab-01  
-#>  4 …1_red.txt …1_red.txt data     ab-01          day02       ab-01_red.… ab-01  
-#>  5 …green.txt …green.txt data     ab-01          day03       ab-01_gree… ab-01  
-#>  6 …green.txt …green.txt data     ac-02          day01       ac-02_gree… ac-02  
-#>  7 …2_red.txt …2_red.txt data     ac-02          day01       ac-02_red.… ac-02  
-#>  8 …green.txt …green.txt data     ac-02          day02       ac-02_gree… ac-02  
-#>  9 …2_red.txt …2_red.txt data     ac-02          day02       ac-02_red.… ac-02  
-#> 10 …green.txt …green.txt data     ac-02          day03       ac-02_gree… ac-02  
-#> 11 …2_red.txt …2_red.txt data     ac-02          day03       ac-02_red.… ac-02  
+#>    .path           .rel  at_layer layer__subject layer__time layer__data subject
+#>    <fs::path>      <chr> <chr>    <chr>          <chr>       <chr>       <chr>  
+#>  1 …b-01_green.txt ab-0… data     ab-01          day01       ab-01_gree… ab-01  
+#>  2 …/ab-01_red.txt ab-0… data     ab-01          day01       ab-01_red.… ab-01  
+#>  3 …b-01_green.txt ab-0… data     ab-01          day02       ab-01_gree… ab-01  
+#>  4 …/ab-01_red.txt ab-0… data     ab-01          day02       ab-01_red.… ab-01  
+#>  5 …b-01_green.txt ab-0… data     ab-01          day03       ab-01_gree… ab-01  
+#>  6 …c-02_green.txt ac-0… data     ac-02          day01       ac-02_gree… ac-02  
+#>  7 …/ac-02_red.txt ac-0… data     ac-02          day01       ac-02_red.… ac-02  
+#>  8 …c-02_green.txt ac-0… data     ac-02          day02       ac-02_gree… ac-02  
+#>  9 …/ac-02_red.txt ac-0… data     ac-02          day02       ac-02_red.… ac-02  
+#> 10 …c-02_green.txt ac-0… data     ac-02          day03       ac-02_gree… ac-02  
+#> 11 …/ac-02_red.txt ac-0… data     ac-02          day03       ac-02_red.… ac-02  
 #> # ℹ 5 more variables: time <chr>, task <chr>, pattern <chr>, .ok <lgl>,
 #> #   .problems <list>
 ```
@@ -349,7 +349,7 @@ ft |>
 #> Rows: 13
 #> Columns: 12
 #> $ .path          <fs::path> "C:/Users/Tristan/Documents/GitRepos/filetree/inst…
-#> $ .rel           <fs::path> "ab-01/ab-01-manifest.txt", "ab-01/day01/ab-01_01_…
+#> $ .rel           <chr> "ab-01/ab-01-manifest.txt", "ab-01/day01/ab-01_01_green…
 #> $ at_layer       <chr> "time", "data", "data", "data", "data", "data", "time",…
 #> $ layer__subject <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "…
 #> $ layer__time    <chr> NA, "day01", "day01", "day02", "day02", "day03", NA, "d…
