@@ -13,17 +13,17 @@ ft_index(ft, files = ft_list(ft), strict = FALSE)
 all files under \code{ft$root} via \code{\link[=ft_list]{ft_list()}}.}
 
 \item{strict}{Logical. If \code{TRUE}, files at layers without registered file
-patterns are reported as problems. If \code{FALSE}, missing file patterns are
+templates are reported as problems. If \code{FALSE}, missing file templates are
 accepted so partial schemas can be used for exploratory indexing.}
 }
 \value{
 A tibble with \code{.path}, \code{.rel}, \code{at_layer}, layer columns
-(\verb{layer__<name>}), captured placeholders, the matched pattern name, \code{.ok}
+(\verb{layer__<name>}), captured placeholders, the matched template name, \code{.ok}
 flag, and \code{.problems} list-column.
 }
 \description{
-Validate file paths against the configured directory and file-name patterns,
-extract placeholder captures, and report any problems. File patterns
+Validate file paths against the configured directory and file-name templates,
+extract placeholder captures, and report any problems. File templates
 registered on parent layers are considered for sidecar files before
 unmatched files are reported.
 }
@@ -36,9 +36,9 @@ ft <- ft_init(root, c("subject", "time", "data")) |>
     time = "day\\\\d{2}",
     task = "red|green"
   )) |>
-  ft_add_dir_pattern("subject", "{subject}") |>
-  ft_add_dir_pattern("time", "{time}") |>
-  ft_add_file_pattern("data", "{subject}_{task}.txt")
+  ft_add_dir_template("subject", "{subject}") |>
+  ft_add_dir_template("time", "{time}") |>
+  ft_add_file_template("data", "{subject}_{task}.txt")
 
 ft_index(ft)
 
@@ -47,8 +47,8 @@ ft_partial <- ft_init(root, c("subject", "time", "data")) |>
     subject = "\\\\w{2}-\\\\d{2}",
     time = "day\\\\d{2}"
   )) |>
-  ft_add_dir_pattern("subject", "{subject}") |>
-  ft_add_dir_pattern("time", "{time}")
+  ft_add_dir_template("subject", "{subject}") |>
+  ft_add_dir_template("time", "{time}")
 
 ft_index(ft_partial)
 ft_index(ft_partial, strict = TRUE)

@@ -18,7 +18,7 @@ Character vector with the formatted summary.
 }
 \description{
 Create a human-readable summary of the filetree configuration, including
-layers, regex pool size, and registered patterns.
+layers, regex pool size, and registered templates.
 }
 \examples{
 root <- system.file("demo-1", package = "filetree")

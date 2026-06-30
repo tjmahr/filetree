@@ -8,18 +8,12 @@
 [![R-CMD-check](https://github.com/tjmahr/filetree/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/tjmahr/filetree/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
-A (currently) largely **vibecoded** package for declarative filetrees.
-This package is mostly a proof-of-concept or an API experiment.
-Contributions:
-
-- 🤖: R code, roxygen2 descriptions
-- 🤓: README
-
-If I review and refactor things, they will move from robot to nerd.
+A largely AI-coded package for declarative filetrees with validation and
+parsing.
 
 ## Installation
 
-You can install the development version of filetree from
+Install the development version of filetree from
 [GitHub](https://github.com/) with:
 
 ``` r
@@ -57,7 +51,7 @@ Here is some data organized into nice folders.
 ```
 
 We set up the filetree with `ft_init()`. Each *layer* is a level of
-hierarchy. At the root, when we list the folders, we see subjects. So
+hierarchy. At the root, when we list the folders, we see subjects. So,
 the first layer is `"subject"`. Inside of a subject folder, when we list
 the folders, we see time points. The layer is therefore `"time"`.
 Finally, in the last level, we see out main data files, so we call this
@@ -75,14 +69,20 @@ ft
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: <empty>
-#>   dir_patterns: <none>
-#>   file_patterns: <none>
+#>   dir_templates: <none>
+#>   file_templates: <none>
 ```
 
-Now, we define the patterns. First, we register and store regexes. These
-can be reused in patterns so we can describe things very succinctly. For
-example, after defining the regexes `subject` and `task`, we can say
-that files have the pattern `"{subject}_{task}.txt"`.
+We define the schema with two related pieces. Field *regexes* define
+values to extract, and *templates* arrange those fields with fixed text.
+Regexes define fields; templates arrange fields.
+
+For example, after defining the field regexes `subject` and `task`, we
+can say that files have the template `"{subject}_{task}.txt"`.
+**Templates match complete directory names or file names**, and fixed
+text is literal. That means `.txt` is a real extension here, not a
+regular expression wildcard. Likewise, `"day{time}"` matches `"day01"`
+when `time = "\\d{2}"`, but not `"day01b"`.
 
 ``` r
 ft <- ft |>
@@ -91,27 +91,27 @@ ft <- ft |>
     time = "day\\d{2}",
     task = "red|green"
   )) |> 
-  ft_add_dir_pattern(
+  ft_add_dir_template(
     layer = "time", 
-    patterns = "{time}"
+    template = "{time}"
   ) |> 
-  ft_add_dir_pattern(
+  ft_add_dir_template(
     layer = "subject", 
-    patterns = "{subject}"
+    template = "{subject}"
   ) |> 
-  ft_add_file_pattern(
+  ft_add_file_template(
     layer = "data",  
-    patterns = "{subject}_{task}.txt"
+    template = "{subject}_{task}.txt"
   )
 ft
 #> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: 3 (subject, time, task)
-#>   dir_patterns:
+#>   dir_templates:
 #>     - subject: default="{subject}"
 #>     - time: default="{time}"
-#>   file_patterns:
+#>   file_templates:
 #>     - at_layer=data: default="{subject}_{task}.txt"
 ```
 
@@ -152,7 +152,7 @@ ft |> ft_index()
 #>  9 …/ac-02_red.txt ac-0… data     ac-02          day02       ac-02_red.… ac-02  
 #> 10 …c-02_green.txt ac-0… data     ac-02          day03       ac-02_gree… ac-02  
 #> 11 …/ac-02_red.txt ac-0… data     ac-02          day03       ac-02_red.… ac-02  
-#> # ℹ 5 more variables: time <chr>, task <chr>, pattern <chr>, .ok <lgl>,
+#> # ℹ 5 more variables: time <chr>, task <chr>, template <chr>, .ok <lgl>,
 #> #   .problems <list>
 ```
 
@@ -185,7 +185,7 @@ That is,
 - a file with the wrong subject
 - a file with a nonexisting task (“blue”)
 
-We reuse the same patterns as earlier and find the bad file names:
+We reuse the same templates as earlier and find the bad file names:
 
 ``` r
 ft <- "./inst/demo-2" |> 
@@ -195,9 +195,9 @@ ft <- "./inst/demo-2" |>
     time = "day\\d{2}",
     task = "red|green"
   )) |> 
-  ft_add_dir_pattern("time", "{time}") |> 
-  ft_add_dir_pattern("subject", "{subject}") |> 
-  ft_add_file_pattern("data", "{subject}_{task}.txt")
+  ft_add_dir_template("time", "{time}") |> 
+  ft_add_dir_template("subject", "{subject}") |> 
+  ft_add_file_template("data", "{subject}_{task}.txt")
 
 ft |> 
   ft_index() |> 
@@ -205,26 +205,26 @@ ft |>
 #> 4/11 files with 4 problems.
 #> 
 #> ab-01/day01 (`data` layer)
-#> • ab-01_blue.txt: filename does not match a file pattern at layer `data`
+#> • ab-01_blue.txt: filename does not match a file template at layer `data`
 #> 
 #> ab-01/day02 (`data` layer)
 #> • ac-01_red.txt: filename has `subject` "ac-01", but a parent directory has
 #>   `subject` "ab-01"
 #> 
 #> ac-02/day3 (`data` layer)
-#> • ac-02_green.txt: directory name 'day3' does not match a dir pattern at layer
+#> • ac-02_green.txt: directory name 'day3' does not match a dir template at layer
 #>   `time`
-#> • ac-02_red.txt: directory name 'day3' does not match a dir pattern at layer
+#> • ac-02_red.txt: directory name 'day3' does not match a dir template at layer
 #>   `time`
 ```
 
-### Pattern consistency and conditional patterns
+### Template consistency and conditional templates
 
 The following example demonstrates
 
 - that fields need to be consistent along a path
-- regexes and file patterns can be defined for only specific layer
-  values
+- field regexes and file templates can be defined for only specific
+  layer values
 
 In the `time` layer, folders are named `day{time}`. In the data layer,
 files are named `"{subject}_{time}_{task}.txt"`. In this demo, there is
@@ -256,9 +256,9 @@ appears at a middle layer in the hierarchy that we need to check.
         └── day03
             └── ab-02_03_green.txt   <---- can't go here
 
-We can make patterns apply conditionally by using `when = list(...)` to
-say which layers a pattern applies to. We can also conditionally
-override regex patterns using `with = c(...)`.
+We can make templates apply conditionally by using `when = list(...)` to
+say which layer values a template applies to. We can also conditionally
+override field regexes using `with = c(...)`.
 
 ``` r
 ft <- "./inst/demo-3" |> 
@@ -268,29 +268,30 @@ ft <- "./inst/demo-3" |>
     time = "\\d{2}",
     task = "red|green"
   )) |> 
-  ft_add_dir_pattern("time", "day{time}") |> 
-  ft_add_dir_pattern("subject", "{subject}") |> 
-  ft_add_file_pattern(
+  ft_add_dir_template("time", "day{time}") |> 
+  ft_add_dir_template("subject", "{subject}") |> 
+  ft_add_file_template(
     "data", 
     "{subject}_{time}_{task}.txt",
-    # limit when this pattern is used
+    # limit when this template is used
     when = list(time = c("01", "02")),
   ) |> 
-  ft_add_file_pattern(
+  ft_add_file_template(
     "time", 
     "{subject}-manifest.txt"
   ) |> 
-  ft_add_file_pattern(
+  ft_add_file_template(
     "data", 
     c(day03 = "{subject}_{time}_{task}.txt"),
-    # limit when this pattern is used
+    # limit when this template is used
     when = c(time = "03"),
-    # temporarily overwrite the pattern too
+    # temporarily override a field regex too
     with = c(task = "yellow")
   )
 ```
 
-In the tree view, we can see multiple file patterns in the `data` layer:
+In the tree view, we can see multiple file templates in the `data`
+layer:
 
 ``` r
 ft_schema_tree(ft)
@@ -321,10 +322,10 @@ ft |>
 #>   has `subject` "ab-02"
 #> 
 #> ab-02/day02 (`data` layer)
-#> • ab-02_02_yellow.txt: filename does not match a file pattern at layer `data`
+#> • ab-02_02_yellow.txt: filename does not match a file template at layer `data`
 #> 
 #> ab-02/day03 (`data` layer)
-#> • ab-02_03_green.txt: filename does not match a file pattern at layer `data`
+#> • ab-02_03_green.txt: filename does not match a file template at layer `data`
 ```
 
 When the ft is complex, we can print out a tree-like version:
@@ -357,7 +358,7 @@ ft |>
 #> $ subject        <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "…
 #> $ time           <chr> NA, "01", "01", "02", "02", "03", NA, "01", "01", "02",…
 #> $ task           <chr> NA, "green", "red", "green", "red", "yellow", NA, "gree…
-#> $ pattern        <chr> "default", "default", "default", "default", "default", …
+#> $ template       <chr> "default", "default", "default", "default", "default", …
 #> $ .ok            <lgl> TRUE, TRUE, TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, TRUE…
 #> $ .problems      <list> <NULL>, <NULL>, <NULL>, "filename has {.var time} {.va…
 ```

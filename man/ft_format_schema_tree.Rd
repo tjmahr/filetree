@@ -13,8 +13,8 @@ ft_format_schema_tree(ft)
 Character vector containing the schema tree lines.
 }
 \description{
-Create a tree-shaped summary of the declared directory and file patterns.
-File patterns are shown in the parent directory where files for that layer
+Create a tree-shaped summary of the declared directory and file templates.
+File templates are shown in the parent directory where files for that layer
 live, with labels such as \verb{ `time` file:} and \verb{ `data` file:}.
 }
 \examples{
@@ -26,9 +26,9 @@ ft <- ft_init(root, c("subject", "time", "data")) |>
     time = "day\\\\d{2}",
     task = "red|green"
   )) |>
-  ft_add_dir_pattern("subject", "{subject}") |>
-  ft_add_dir_pattern("time", "{time}") |>
-  ft_add_file_pattern("data", "{subject}_{task}.txt")
+  ft_add_dir_template("subject", "{subject}") |>
+  ft_add_dir_template("time", "{time}") |>
+  ft_add_file_template("data", "{subject}_{task}.txt")
 
 ft_format_schema_tree(ft)
 }

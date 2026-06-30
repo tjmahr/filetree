@@ -2,7 +2,7 @@
 % Please edit documentation in R/filetree.R
 \name{ft_add_regex}
 \alias{ft_add_regex}
-\title{Register regex templates used by patterns}
+\title{Register field regexes used by component templates}
 \usage{
 ft_add_regex(ft, regexes)
 }
@@ -15,9 +15,10 @@ ft_add_regex(ft, regexes)
 The updated \code{filetree} object.
 }
 \description{
-Add named regular expressions to the pool that can be referenced by
-placeholders such as \code{{subject}} inside directory or file patterns. Regexes
-can also reference other regexes in the pool with the same placeholder syntax.
+Add named regular expressions for values that should be extracted from
+directory or file names. Field regexes can be referenced by placeholders such
+as \code{{subject}} inside directory or file component templates. Field regexes can
+also reference other field regexes with the same placeholder syntax.
 }
 \examples{
 root <- system.file("demo-1", package = "filetree")

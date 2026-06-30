@@ -35,9 +35,9 @@ ft <- ft_init(root, c("subject", "time", "data")) |>
     time = "day\\\\d{2}",
     task = "red|green"
   )) |>
-  ft_add_dir_pattern("subject", "{subject}") |>
-  ft_add_dir_pattern("time", "{time}") |>
-  ft_add_file_pattern("data", "{subject}_{task}.txt")
+  ft_add_dir_template("subject", "{subject}") |>
+  ft_add_dir_template("time", "{time}") |>
+  ft_add_file_template("data", "{subject}_{task}.txt")
 
 ft_glimpse_problems(ft, n = 3)
 }
