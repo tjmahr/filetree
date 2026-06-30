@@ -743,7 +743,10 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   stopifnot(inherits(ft, "filetree"))
   stopifnot(is.logical(strict), length(strict) == 1, !is.na(strict))
 
-  rel <- .ft_path_rel(files, ft$root)
+  path_info <- .ft_path_rel(files, ft$root)
+  rel <- path_info$rel
+  outside_root <- !path_info$under_root
+  at_or_above_root <- path_info$at_root | outside_root
   parts_list <- strsplit(rel, "/", fixed = TRUE)
 
   layers <- ft$layers
@@ -870,8 +873,8 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   }
 
   # pre-flag structural problems
-  too_deep <- tbl$at_layer == ".__too_deep__"
-  bad_root <- is.na(tbl$at_layer)
+  bad_root <- is.na(tbl$at_layer) | at_or_above_root
+  too_deep <- tbl$at_layer == ".__too_deep__" & !bad_root
   if (any(too_deep)) {
     for (j in which(too_deep)) {
       problems[[j]] <- c(
@@ -1074,11 +1077,20 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   prefix <- paste0(root_chr, "/")
 
   under_root <- startsWith(files_chr, prefix)
+  at_root <- files_chr == root_chr
   if (all(under_root)) {
-    return(substring(files_chr, nchar(prefix) + 1L))
+    return(list(
+      rel = substring(files_chr, nchar(prefix) + 1L),
+      under_root = under_root,
+      at_root = at_root
+    ))
   }
 
-  as.character(fs::path_rel(files, start = root))
+  list(
+    rel = as.character(fs::path_rel(files, start = root)),
+    under_root = under_root,
+    at_root = at_root
+  )
 }
 
 #' Glimpse filetree indexing problems

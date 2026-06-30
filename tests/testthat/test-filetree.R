@@ -221,6 +221,38 @@ test_that("Missing file patterns are okay by default and problems in strict mode
   ))
 })
 
+test_that("Files outside or at the root are structural problems", {
+  root <- fs::path_temp("filetree-outside-root")
+  outside <- fs::path(fs::path_dir(root), "outside", "ab-01_red.txt")
+
+  ft_root <- ft_init(root, c("subject", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_pattern("subject", "{subject}") |>
+    ft_add_file_pattern("data", "{subject}_{task}.txt")
+
+  index <- ft_index(ft_root, c(
+    fs::path(root, "ab-01", "ab-01_red.txt"),
+    outside,
+    root
+  ))
+
+  expect_true(index$.ok[[1]])
+  expect_false(index$.ok[[2]])
+  expect_false(index$.ok[[3]])
+  expect_equal(
+    index$.problems[[2]],
+    "file is at or above root; no matching layer"
+  )
+  expect_equal(
+    index$.problems[[3]],
+    "file is at or above root; no matching layer"
+  )
+  expect_false(any(grepl("path deeper than layers", index$.problems[[2]], fixed = TRUE)))
+})
+
 test_that("Regex pool entries can reference other regex pool entries", {
   ft_recursive <- ft_init(
     root = root1,

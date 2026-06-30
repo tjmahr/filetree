@@ -152,6 +152,9 @@ outside that direct prefix. File-layer resolution is skipped unless an
 immediate parent layer has registered file patterns, which avoids row-wise
 sidecar checks for ordinary data-file trees.
 
+Files outside `ft$root`, or paths equal to the root itself, are immediate
+structural problems. They are not matched against directory or file patterns.
+
 Directory patterns are applied before file patterns. This matters because file
 patterns may depend on parent metadata through `when`, and because file captures
 are checked against values already extracted from parent directories.
