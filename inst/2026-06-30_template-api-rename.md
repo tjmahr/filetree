@@ -47,6 +47,10 @@ renamed the public template-registration API.
   `ft_add_dir_template()` and `ft_add_file_template()`. The function name
   already says the object being added is a template, and the singular argument
   reads better in named calls.
+- For branch-specific value domains, prefer broad logical fields in the global
+  regex pool plus branch-specific directory validation. Downstream templates can
+  then reuse the logical field and rely on capture consistency to flag wrong
+  branch values.
 - Preserve legitimate non-package uses of the word `pattern`, such as the base R
   `grepl(pattern = ...)` argument, license text, and dependency metadata in
   `renv.lock`.
@@ -149,12 +153,79 @@ collection of registered templates.
 **Compatibility:** No `templates` alias was kept, matching the rest of the
 pre-release API cleanup.
 
+### 2026-06-30 - Branch-Specific Regex Idiom
+
+**Question:** In a tree with CP branches using `v\d\d` visit identifiers and
+TDx branches using `x\d\d` visit identifiers, should `with` on a directory
+template affect downstream file templates?
+
+**Current semantics:** `with` is template-local. A directory template's `with`
+override validates and extracts that directory component only; it does not
+cascade to child directory or file templates.
+
+**Decision:** Use the package's existing consistency model instead of adding
+cascading `with` or conditional regex pools for now. Define a broad logical
+field globally, such as `visit_id = "[A-Z()a-z]+[vx]\\d\\d"`, and define
+branch-specific helper regexes such as `cp_visit_id` and `tdx_visit_id`.
+
+**Idiom:** Branch-specific directory templates use `with` to validate the
+logical field against the branch-specific helper:
+
+```r
+ft_add_dir_template(
+  "visit",
+  c(CP = "{visit_id}", CP_tagged = "{visit_id}_{visit_tag}"),
+  when = list(sample = c("CP1", "CP2")),
+  with = c(visit_id = "{cp_visit_id}")
+) |>
+ft_add_dir_template(
+  "visit",
+  c(TDx = "{visit_id}", TDx_tagged = "{visit_id}_{visit_tag}"),
+  when = list(sample = "TDx"),
+  with = c(visit_id = "{tdx_visit_id}")
+)
+```
+
+Downstream templates reuse `{visit_id}`. If a TDx branch has an `x01` visit
+directory but a downstream file contains `v01`, the broad downstream regex can
+parse the value and the existing parent/child capture conflict should flag the
+wrong branch value.
+
+**Deferred idea:** Conditional regex pools or inherited branch-level overrides
+may still be useful later, but they are a larger semantic feature. They should
+not be introduced by silently making `with` cascade.
+
+### 2026-06-30 - Additive `when` Pressure Point
+
+**Observation:** Real schemas can have a default template that is valid for
+most branches, plus a special-case template that should be valid only for a
+specific branch. For example, a default base-directory template may allow
+`TOCSW` and `TOCSS`, while `SLOW` visits should allow only `TOCSSLOW`.
+
+**Current limitation:** `when` is additive and only supports positive
+conditions. A default template with no `when` still applies inside branches
+that also have more specific `when` templates. There is no clean way to say
+"this default applies except when `visit_tag == SLOW`" or "templates under this
+condition replace the unconditional defaults."
+
+**Decision for now:** Keep the current additive semantics. Do not silently make
+`when` exclusive, because some unconditional templates really should apply
+inside special-case branches.
+
+**Design pressure:** Future API work may need one of these concepts:
+
+- negative conditions, such as `when_not = c(visit_tag = "SLOW")`;
+- exclusive condition groups, where a matched group hides unconditional
+  templates for that layer;
+- schema linting that warns when unconditional templates overlap with
+  conditional templates on the same layer.
+
 ### 2026-06-30 - Verification
 
 **Formatting:** `air format .` completed successfully.
 
 **Tests:** `devtools::test()` passed with
-`FAIL 0 | WARN 0 | SKIP 0 | PASS 135`.
+`FAIL 0 | WARN 0 | SKIP 0 | PASS 136`.
 
 **Package check:** `devtools::check(document = FALSE)` passed with
 `0 errors | 0 warnings | 0 notes`.
