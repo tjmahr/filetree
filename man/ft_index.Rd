@@ -4,7 +4,12 @@
 \alias{ft_index}
 \title{Index files against a filetree specification}
 \usage{
-ft_index(ft, files = ft_list(ft), strict = FALSE)
+ft_index(
+  ft,
+  files = ft_list(ft, include_ignored = include_ignored),
+  strict = FALSE,
+  include_ignored = FALSE
+)
 }
 \arguments{
 \item{ft}{A \code{filetree} object.}
@@ -15,6 +20,9 @@ all files under \code{ft$root} via \code{\link[=ft_list]{ft_list()}}.}
 \item{strict}{Logical. If \code{TRUE}, files at layers without registered file
 templates are reported as problems. If \code{FALSE}, missing file templates are
 accepted so partial schemas can be used for exploratory indexing.}
+
+\item{include_ignored}{Logical. If \code{TRUE}, include ignored files as inert
+audit rows. If \code{FALSE}, ignored files are pruned before validation.}
 }
 \value{
 A tibble with \code{.path}, \code{.rel}, \code{at_layer}, layer columns

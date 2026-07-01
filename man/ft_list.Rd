@@ -4,10 +4,13 @@
 \alias{ft_list}
 \title{List files under the filetree root}
 \usage{
-ft_list(ft)
+ft_list(ft, include_ignored = FALSE)
 }
 \arguments{
 \item{ft}{A \code{filetree} object.}
+
+\item{include_ignored}{Logical. If \code{TRUE}, return files that match ignored
+file or directory templates. If \code{FALSE}, ignored files are pruned.}
 }
 \value{
 An \code{fs_path} character vector of file paths under \code{ft$root}.

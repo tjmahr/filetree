@@ -914,6 +914,188 @@ test_that("File templates at parent layers validate sidecar files", {
   )
 })
 
+test_that("ft_set_root updates the root path", {
+  ft_root <- ft_init(root1, c("subject", "time", "data"))
+
+  ft_updated <- ft_root |> ft_set_root(root2)
+
+  expect_equal(ft_updated$root, fs::path_abs(root2))
+  expect_equal(ft_updated$layers, ft_root$layers)
+  expect_equal(ft_updated$dir_templates, ft_root$dir_templates)
+  expect_error(
+    ft_set_root(ft_root, character()),
+    "`root` must be a single non-empty path.",
+    fixed = TRUE
+  )
+})
+
+test_that("Ignore file templates drop matching files from indexes", {
+  root <- fs::path_temp("filetree-ignore-file")
+  files <- fs::path(
+    root,
+    c(
+      "ab-01/day01/ab-01_red.txt",
+      "ab-01/day01/ab-01_notes.txt"
+    )
+  )
+  fs::dir_create(fs::path_dir(files))
+  fs::file_create(files)
+
+  ft_ignore <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_dir_template("time", "day{time}") |>
+    ft_add_file_template("data", "{subject}_{task}.txt") |>
+    ft_ignore_file_template("data", "{subject}_notes.txt")
+
+  index <- ft_index(ft_ignore)
+
+  expect_equal(index$.rel, "ab-01/day01/ab-01_red.txt")
+  expect_true(index$.ok[[1]])
+  expect_false(".ignored" %in% names(index))
+})
+
+test_that("Ignore directory templates prune matching subtrees", {
+  root <- fs::path_temp("filetree-ignore-dir")
+  files <- fs::path(
+    root,
+    c(
+      "ab-01/day01/ab-01_red.txt",
+      "ab-01/tmp/ab-01_bad.txt",
+      "ab-02/day01/ab-02_green.txt"
+    )
+  )
+  fs::dir_create(fs::path_dir(files))
+  fs::file_create(files)
+
+  ft_ignore <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_dir_template("time", "day{time}") |>
+    ft_add_file_template("data", "{subject}_{task}.txt") |>
+    ft_ignore_dir_template("time", "tmp")
+
+  index <- ft_index(ft_ignore)
+
+  expect_equal(
+    sort(index$.rel),
+    c("ab-01/day01/ab-01_red.txt", "ab-02/day01/ab-02_green.txt")
+  )
+  expect_true(all(index$.ok))
+})
+
+test_that("ft_list can include or exclude ignored files", {
+  root <- fs::path_temp("filetree-ignore-list")
+  files <- fs::path(
+    root,
+    c("ab-01/day01/ab-01_red.txt", "ab-01/tmp/ab-01_bad.txt")
+  )
+  fs::dir_create(fs::path_dir(files))
+  fs::file_create(files)
+
+  ft_ignore <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_ignore_dir_template("time", "tmp")
+
+  listed <- fs::path_file(ft_list(ft_ignore))
+  listed_all <- fs::path_file(ft_list(ft_ignore, include_ignored = TRUE))
+
+  expect_equal(listed, "ab-01_red.txt")
+  expect_equal(sort(listed_all), c("ab-01_bad.txt", "ab-01_red.txt"))
+})
+
+test_that("Ignored files can be included as inert audit rows", {
+  root <- fs::path_temp("filetree-ignore-audit")
+  files <- fs::path(
+    root,
+    c(
+      "ab-01/day01/ab-01_red.txt",
+      "ab-01/tmp/not-a-valid-file-name.txt"
+    )
+  )
+  fs::dir_create(fs::path_dir(files))
+  fs::file_create(files)
+
+  ft_ignore <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_dir_template("time", "day{time}") |>
+    ft_add_file_template("data", "{subject}_{task}.txt") |>
+    ft_ignore_dir_template("time", c(scratch = "tmp"))
+
+  index <- ft_index(ft_ignore, include_ignored = TRUE, strict = TRUE)
+  ignored <- index[index$.ignored, , drop = FALSE]
+
+  expect_equal(nrow(index), 2)
+  expect_equal(nrow(ignored), 1)
+  expect_equal(ignored$.rel, "ab-01/tmp/not-a-valid-file-name.txt")
+  expect_equal(ignored$at_layer, "data")
+  expect_equal(ignored$layer__subject, "ab-01")
+  expect_equal(ignored$layer__time, "tmp")
+  expect_equal(ignored$.ignore_type, "dir")
+  expect_equal(ignored$.ignore_template, "scratch")
+  expect_true(ignored$.ok)
+  expect_length(ignored$.problems[[1]], 0)
+  expect_true(is.na(ignored$subject))
+  expect_true(is.na(ignored$time))
+  expect_true(is.na(ignored$task))
+})
+
+test_that("Ignore templates support when and with arguments", {
+  root <- fs::path_temp("filetree-ignore-when-with")
+  files <- fs::path(
+    root,
+    c(
+      "lab-a/tmp/red.txt",
+      "lab-b/tmp/red.txt",
+      "lab-b/dropme/red.txt",
+      "lab-b/keep/red.txt"
+    )
+  )
+  fs::dir_create(fs::path_dir(files))
+  fs::file_create(files)
+
+  ft_ignore <- ft_init(root, c("site", "bucket", "data")) |>
+    ft_add_regex(c(
+      site = "lab-a|lab-b",
+      bucket = "tmp|dropme|keep",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("site", "{site}") |>
+    ft_add_dir_template("bucket", "{bucket}") |>
+    ft_add_file_template("data", "{task}.txt") |>
+    ft_ignore_dir_template("bucket", c(lab_a = "{bucket}"), when = c(site = "lab-a")) |>
+    ft_ignore_dir_template(
+      "bucket",
+      c(lab_b = "{bucket}"),
+      when = c(site = "lab-b"),
+      with = c(bucket = "dropme")
+    )
+
+  index <- ft_index(ft_ignore)
+
+  expect_equal(
+    sort(index$.rel),
+    c("lab-b/keep/red.txt", "lab-b/tmp/red.txt")
+  )
+})
+
 test_that("Problem glimpses print a compact summary from an index", {
   index <- tibble::tibble(
     .rel = c("dir-a/a.txt", "dir-b/b.txt", "dir-a/c.txt"),
@@ -1142,6 +1324,43 @@ test_that("Schema trees show file templates registered on parent layers", {
   expect_match(lines[[subject_manifest]], "^\u251c\u2500\u2500")
   expect_match(lines[[time_manifest]], "^    \u251c\u2500\u2500")
   expect_match(lines[[data_file]], "^        \u2514\u2500\u2500")
+})
+
+test_that("Schema trees show ignored directory and file templates", {
+  ft_schema <- ft_init("demo-root", c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_dir_template("time", "day{time}") |>
+    ft_add_file_template("data", "{subject}_{time}_{task}.txt") |>
+    ft_ignore_dir_template("time", c(scratch = "tmp")) |>
+    ft_ignore_file_template("data", c(notes = "{subject}_notes.txt"))
+
+  lines <- ft_format_schema_tree(ft_schema)
+
+  expect_true(any(grepl("ignored `time` dir: scratch = tmp", lines, fixed = TRUE)))
+  expect_true(any(grepl(
+    "ignored `data` file: notes = {subject}_notes.txt",
+    lines,
+    fixed = TRUE
+  )))
+})
+
+test_that("Formatted filetrees summarize ignored templates", {
+  ft_schema <- ft_init("demo-root", c("subject", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}", task = "red|green")) |>
+    ft_ignore_dir_template("subject", c(scratch = "tmp")) |>
+    ft_ignore_file_template("data", c(notes = "{subject}_notes.txt"))
+
+  lines <- format(ft_schema)
+
+  expect_true(grepl("ignore_dir_templates:", lines, fixed = TRUE))
+  expect_true(grepl("ignore_file_templates:", lines, fixed = TRUE))
+  expect_true(grepl("subject: scratch=\"tmp\"", lines, fixed = TRUE))
+  expect_true(grepl("at_layer=data: notes=\"{subject}_notes.txt\"", lines, fixed = TRUE))
 })
 
 test_that("Schema trees hide default template names only for singleton layers", {

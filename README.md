@@ -65,12 +65,14 @@ ft <- ft_init(
   layers = c("subject", "time", "data")
 )
 ft
-#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: <empty>
 #>   dir_templates: <none>
 #>   file_templates: <none>
+#>   ignore_dir_templates: <none>
+#>   ignore_file_templates: <none>
 ```
 
 We define the schema with two related pieces. Field *regexes* define
@@ -104,7 +106,7 @@ ft <- ft |>
     template = "{subject}_{task}.txt"
   )
 ft
-#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: 3 (subject, time, task)
@@ -113,13 +115,15 @@ ft
 #>     - time: default="{time}"
 #>   file_templates:
 #>     - at_layer=data: default="{subject}_{task}.txt"
+#>   ignore_dir_templates: <none>
+#>   ignore_file_templates: <none>
 ```
 
 We can also view the filetree schema as a tree:
 
 ``` r
 ft |> ft_schema_tree()
-#> C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
+#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
 #> └── subject: {subject}
 #>     └── time: {time}
 #>         └── `data` file: {subject}_{task}.txt
@@ -154,6 +158,44 @@ ft |> ft_index()
 #> 11 …/ac-02_red.txt ac-0… data     ac-02          day03       ac-02_red.… ac-02  
 #> # ℹ 5 more variables: time <chr>, task <chr>, template <chr>, .ok <lgl>,
 #> #   .problems <list>
+```
+
+### Ignoring files and directory subtrees
+
+Some files are intentionally outside the schema. Ignored files are
+pruned from `ft_list()` and `ft_index()` by default. Ignored directory
+templates prune every file below a matching directory.
+
+``` r
+files_to_check <- fs::path(
+  ft$root,
+  c(
+    "ab-01/day01/ab-01_red.txt",
+    "ab-01/day01/ab-01_notes.txt",
+    "ab-01/tmp/not-a-data-file.txt"
+  )
+)
+
+ft_ignored <- ft |>
+  ft_ignore_file_template("data", "{subject}_notes.txt") |>
+  ft_ignore_dir_template("time", "tmp")
+
+ft_index(ft_ignored, files_to_check)
+#> # A tibble: 1 × 12
+#>   .path      .rel  at_layer layer__subject layer__time layer__data subject time 
+#>   <fs::path> <chr> <chr>    <chr>          <chr>       <chr>       <chr>   <chr>
+#> 1 …1_red.txt ab-0… data     ab-01          day01       ab-01_red.… ab-01   day01
+#> # ℹ 4 more variables: task <chr>, template <chr>, .ok <lgl>, .problems <list>
+
+ft_index(ft_ignored, files_to_check, include_ignored = TRUE)
+#> # A tibble: 3 × 15
+#>   .path      .rel  at_layer layer__subject layer__time layer__data subject time 
+#>   <fs::path> <chr> <chr>    <chr>          <chr>       <chr>       <chr>   <chr>
+#> 1 …1_red.txt ab-0… data     ab-01          day01       ab-01_red.… ab-01   day01
+#> 2 …notes.txt ab-0… data     ab-01          day01       ab-01_note… <NA>    <NA> 
+#> 3 …-file.txt ab-0… data     ab-01          tmp         not-a-data… <NA>    <NA> 
+#> # ℹ 7 more variables: task <chr>, template <chr>, .ignored <lgl>,
+#> #   .ignore_template <chr>, .ignore_type <chr>, .ok <lgl>, .problems <list>
 ```
 
 For comparison, here is a file tree with some problems.
@@ -295,7 +337,7 @@ layer:
 
 ``` r
 ft_schema_tree(ft)
-#> C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-3
+#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
 #>     ├── `time` file: {subject}-manifest.txt
 #>     └── time: day{time}
@@ -332,7 +374,7 @@ When the ft is complex, we can print out a tree-like version:
 
 ``` r
 ft_schema_tree(ft)
-#> C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-3
+#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
 #>     ├── `time` file: {subject}-manifest.txt
 #>     └── time: day{time}
@@ -349,7 +391,7 @@ ft |>
   dplyr::glimpse()
 #> Rows: 13
 #> Columns: 12
-#> $ .path          <fs::path> "C:/Users/Tristan/Documents/GitRepos/filetree/inst…
+#> $ .path          <fs::path> "C:/Users/mahr/Documents/GitRepos/filetree/inst/de…
 #> $ .rel           <chr> "ab-01/ab-01-manifest.txt", "ab-01/day01/ab-01_01_green…
 #> $ at_layer       <chr> "time", "data", "data", "data", "data", "data", "time",…
 #> $ layer__subject <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "…

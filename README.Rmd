@@ -105,6 +105,31 @@ ft |> ft_list() |> fs::path_rel()
 ft |> ft_index()
 ```
 
+### Ignoring files and directory subtrees
+
+Some files are intentionally outside the schema. Ignored files are pruned from
+`ft_list()` and `ft_index()` by default. Ignored directory templates prune every
+file below a matching directory.
+
+```{r}
+files_to_check <- fs::path(
+  ft$root,
+  c(
+    "ab-01/day01/ab-01_red.txt",
+    "ab-01/day01/ab-01_notes.txt",
+    "ab-01/tmp/not-a-data-file.txt"
+  )
+)
+
+ft_ignored <- ft |>
+  ft_ignore_file_template("data", "{subject}_notes.txt") |>
+  ft_ignore_dir_template("time", "tmp")
+
+ft_index(ft_ignored, files_to_check)
+
+ft_index(ft_ignored, files_to_check, include_ignored = TRUE)
+```
+
 
 For comparison, here is a file tree with some problems. 
 

@@ -60,9 +60,11 @@ flowchart TD
     User --> Regex["ft_add_regex()"]
     User --> DirTemplates["ft_add_dir_template()"]
     User --> FileTemplates["ft_add_file_template()"]
+    User --> IgnoreTemplates["ft_ignore_dir_template() / ft_ignore_file_template()"]
     Regex --> Object
     DirTemplates --> Object
     FileTemplates --> Object
+    IgnoreTemplates --> Object
     Object --> List["ft_list()"]
     List --> Index["ft_index()"]
     User --> Index
@@ -81,6 +83,8 @@ main S3 class, `filetree`, represented as a list with these slots:
 | `regex_pool` | Named reusable field regexes. |
 | `dir_templates` | Directory template specs for non-terminal layers. |
 | `file_templates` | File-name template specs for any configured layer. |
+| `ignore_dir_templates` | Directory template specs that prune matching subtrees before validation. |
+| `ignore_file_templates` | File-name template specs that prune matching files before validation. |
 
 ## User-Facing API
 
@@ -90,7 +94,10 @@ main S3 class, `filetree`, represented as a list with these slots:
 | `ft_add_regex()` | Register reusable field regexes and recompile existing templates. |
 | `ft_add_dir_template()` | Register templates for directory names at a non-terminal layer. |
 | `ft_add_file_template()` | Register file-name templates for files at a layer. |
-| `ft_list()` | List files under the configured root. |
+| `ft_ignore_dir_template()` | Register directory templates for subtrees excluded from indexing. |
+| `ft_ignore_file_template()` | Register file-name templates for files excluded from indexing. |
+| `ft_set_root()` | Return a filetree with a different root path. |
+| `ft_list()` | List files under the configured root, excluding ignored files by default. |
 | `ft_index()` | Parse, validate, and diagnose files against the schema. |
 | `ft_glimpse_problems()` | Print a compact summary of problem files. |
 | `ft_format_schema_tree()` | Return tree-shaped schema summary lines. |
@@ -129,6 +136,13 @@ This supports cases such as ordinary files on days 1 and 2, but a different
 allowed task value on day 3, or different directory naming conventions under
 different parent directories.
 
+Ignored directory and file templates use the same full-component template
+language and the same `when` and `with` arguments. They classify paths as
+outside the validation contract. Ignored directory templates have subtree
+semantics: every file below a matching directory component is ignored. Ignored
+file templates match file names at a configured layer, including sidecar-style
+layers.
+
 ## Indexing Flow
 
 ```mermaid
@@ -156,11 +170,23 @@ sequenceDiagram
 relative path into components, and fills raw `layer__<name>` columns. It assigns
 an initial `at_layer` from path depth with `.ft_at_layer_from_parts()`.
 
+Before validation, ignore templates classify paths. By default, ignored files
+are dropped. With `include_ignored = TRUE`, ignored files remain in the index as
+inert audit rows with `.ignored = TRUE`, `.ignore_template`, `.ignore_type`,
+`.ok = TRUE`, and empty `.problems`. Ignored rows keep path-derived columns
+such as `.path`, `.rel`, `at_layer`, and `layer__<name>`, but they do not
+participate in directory validation, file validation, capture extraction,
+conflict checks, or strict-mode diagnostics.
+
 For performance, `ft_index()` uses a fast relative-path path when supplied files
 are already under `ft$root`, and falls back to `fs::path_rel()` only for paths
 outside that direct prefix. File-layer resolution is skipped unless an
 immediate parent layer has registered file templates, which avoids row-wise
 sidecar checks for ordinary data-file trees.
+
+`ft_list()` also applies ignore templates by default so callers can prune files
+before building an index. Use `include_ignored = TRUE` to list every file under
+the root.
 
 Files outside `ft$root`, or paths equal to the root itself, are immediate
 structural problems. They are not matched against directory or file templates.
@@ -180,6 +206,8 @@ The returned tibble contains:
 - `layer__<name>` columns for raw path components.
 - one column for every placeholder used by registered templates.
 - `template`, the matched file template name when one matched.
+- `.ignored`, `.ignore_template`, and `.ignore_type` when
+  `include_ignored = TRUE`.
 - `.ok`, a logical problem flag.
 - `.problems`, a list-column of user-facing diagnostic messages.
 
@@ -212,7 +240,8 @@ shown in the parent directory where files for that layer live, using labels
 such as `` `time` file:`` and `` `data` file:``. This keeps sidecar files
 visually distinct from child directories while still making the owning layer
 explicit. Conditional directory and file templates include `when` annotations,
-and template-local regex overrides include `with` annotations.
+template-local regex overrides include `with` annotations, and ignored
+templates are shown as ignored directory or file entries.
 
 The R source uses Unicode escape sequences for tree branches rather than literal
 box-drawing characters so the package source remains ASCII-only.
@@ -227,6 +256,7 @@ exercise:
 - regex pool recursion, recompilation, missing references, and cycle errors;
 - partial schemas and `strict = TRUE`;
 - conditional directory and file templates and template-local regex overrides;
+- ignored file templates, ignored directory subtrees, and ignored audit rows;
 - placeholder names with underscores;
 - user-facing problem messages;
 - sidecar files registered on parent layers;
@@ -246,10 +276,11 @@ Current local test guidance from project notes: `devtools::document()`,
 | --- | --- | --- |
 | Package metadata | `DESCRIPTION` | imports, package description, R version |
 | Package namespace | `NAMESPACE` | exported functions and S3 methods |
-| Core implementation | `R/filetree.R` | `ft_init()`, `ft_add_regex()`, `ft_add_dir_template()`, `ft_add_file_template()`, `ft_index()` |
+| Core implementation | `R/filetree.R` | `ft_init()`, `ft_set_root()`, `ft_add_regex()`, `ft_add_dir_template()`, `ft_add_file_template()`, `ft_ignore_dir_template()`, `ft_ignore_file_template()`, `ft_index()` |
 | template compilation | `R/filetree.R` | `.ft_placeholders()`, `.ft_compile_template()`, `.ft_expand_pool_regex()`, `.ft_recompile_templates()` |
 | Conditional matching | `R/filetree.R` | `.ft_normalize_when()`, `.ft_when_matches()`, `.ft_file_template_matches()` |
 | File-layer resolution | `R/filetree.R` | `.ft_at_layer_from_parts()`, `.ft_candidate_file_layers()`, `.ft_resolve_file_layers()` |
+| Ignore classification | `R/filetree.R` | `.ft_classify_ignored()`, `.ft_has_ignore_templates()` |
 | Diagnostics | `R/filetree.R` | `ft_glimpse_problems()`, `.ft_validate_index()` |
 | Schema display | `R/filetree.R` | `ft_format_schema_tree()`, `ft_schema_tree()`, `.ft_format_schema_dir()` |
 | S3 display | `R/filetree.R` | `format.filetree()`, `print.filetree()` |
@@ -264,6 +295,8 @@ Current local test guidance from project notes: `devtools::document()`,
 | directory layer | Any layer before the final file-name layer. |
 | file template | A full-string component template that validates and extracts metadata from a file name at a specific layer. |
 | directory template | A full-string component template that validates and extracts metadata from a directory name at a specific layer. |
+| ignored directory template | A full-string component template that excludes every file below a matching directory component. |
+| ignored file template | A full-string component template that excludes matching files from listing and indexing. |
 | regex pool | Named field regexes reusable from `{placeholder}` syntax. |
 | placeholder | A `{name}` token in a component template that compiles to a capture using a regex pool entry. |
 | extracted field | A tibble column produced by captures from directory or file templates. |

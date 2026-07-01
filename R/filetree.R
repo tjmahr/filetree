@@ -15,6 +15,14 @@
   }
 }
 
+.ft_check_root <- function(root, call = rlang::caller_env()) {
+  if (
+    !is.character(root) || length(root) != 1 || is.na(root) || !nzchar(root)
+  ) {
+    .ft_abort_arg("root", "must be a single non-empty path.", call = call)
+  }
+}
+
 .ft_collapse_or <- function(x) {
   if (!length(x)) {
     return("<none>")
@@ -46,11 +54,7 @@
 #' ft
 #' @export
 ft_init <- function(root, layers) {
-  if (
-    !is.character(root) || length(root) != 1 || is.na(root) || !nzchar(root)
-  ) {
-    .ft_abort_arg("root", "must be a single non-empty path.")
-  }
+  .ft_check_root(root)
   if (
     !is.character(layers) ||
       length(layers) < 1 ||
@@ -81,10 +85,38 @@ ft_init <- function(root, layers) {
         vector("list", length(dir_layers)),
         dir_layers
       ),
-      file_templates = rlang::set_names(vector("list", length(layers)), layers) # templates at any layer
+      file_templates = rlang::set_names(vector("list", length(layers)), layers), # templates at any layer
+      ignore_dir_templates = rlang::set_names(
+        vector("list", length(dir_layers)),
+        dir_layers
+      ),
+      ignore_file_templates = rlang::set_names(
+        vector("list", length(layers)),
+        layers
+      )
     ),
     class = "filetree"
   )
+}
+
+#' Change a filetree root
+#'
+#' Return a copy of a `filetree` object with a new root directory.
+#'
+#' @param ft A `filetree` object.
+#' @param root Path to the new root directory used as the base for indexing.
+#' @return The updated `filetree` object.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#' ft <- ft_init(root, c("subject", "time", "data"))
+#'
+#' ft_set_root(ft, tempdir())
+#' @export
+ft_set_root <- function(ft, root) {
+  .ft_check_filetree(ft)
+  .ft_check_root(root)
+  ft$root <- fs::path_abs(root)
+  ft
 }
 #' Register field regexes used by component templates
 #'
@@ -410,6 +442,68 @@ ft_add_regex <- function(ft, regexes) {
     compiled <- Map(.ft_compile_template, spec$raw, regex_pool)
     ft$file_templates[[at_layer]]$compiled <- compiled
     ft$file_templates[[at_layer]]$regex_pool <- regex_pool
+  }
+
+  for (layer in names(ft$ignore_dir_templates)) {
+    spec <- ft$ignore_dir_templates[[layer]]
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
+    if (is.null(spec$when)) {
+      spec$when <- rep(
+        list(rlang::set_names(character(), character())),
+        length(spec$raw)
+      )
+      names(spec$when) <- names(spec$raw)
+    }
+    if (is.null(spec$with)) {
+      spec$with <- rep(
+        list(rlang::set_names(character(), character())),
+        length(spec$raw)
+      )
+      names(spec$with) <- names(spec$raw)
+    }
+    regex_pool <- lapply(
+      spec$with,
+      .ft_merge_regex_pool,
+      regex_pool = ft$regex_pool
+    )
+    compiled <- Map(.ft_compile_template, spec$raw, regex_pool)
+    ft$ignore_dir_templates[[layer]]$compiled <- compiled
+    ft$ignore_dir_templates[[layer]]$when <- spec$when
+    ft$ignore_dir_templates[[layer]]$with <- spec$with
+    ft$ignore_dir_templates[[layer]]$regex_pool <- regex_pool
+  }
+
+  for (at_layer in names(ft$ignore_file_templates)) {
+    spec <- ft$ignore_file_templates[[at_layer]]
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
+    if (is.null(spec$when)) {
+      spec$when <- rep(
+        list(rlang::set_names(character(), character())),
+        length(spec$raw)
+      )
+      names(spec$when) <- names(spec$raw)
+    }
+    if (is.null(spec$with)) {
+      spec$with <- rep(
+        list(rlang::set_names(character(), character())),
+        length(spec$raw)
+      )
+      names(spec$with) <- names(spec$raw)
+    }
+    regex_pool <- lapply(
+      spec$with,
+      .ft_merge_regex_pool,
+      regex_pool = ft$regex_pool
+    )
+    compiled <- Map(.ft_compile_template, spec$raw, regex_pool)
+    ft$ignore_file_templates[[at_layer]]$compiled <- compiled
+    ft$ignore_file_templates[[at_layer]]$when <- spec$when
+    ft$ignore_file_templates[[at_layer]]$with <- spec$with
+    ft$ignore_file_templates[[at_layer]]$regex_pool <- regex_pool
   }
 
   ft
@@ -850,6 +944,357 @@ ft_add_file_template <- function(
   ft
 }
 
+# ---- ignore templates ----
+
+#' Register ignored directory templates for a layer
+#'
+#' Compile named component templates that identify directory subtrees to ignore.
+#' When a directory component matches an ignored directory template, files below
+#' that directory are excluded from [ft_list()] and [ft_index()] unless
+#' `include_ignored = TRUE`.
+#'
+#' @param ft A `filetree` object.
+#' @param layer Directory layer name (must be one of the non-file layers).
+#' @param template Named character vector of full-string component templates.
+#' @param when Optional named character vector or named list of exact-match
+#'   conditions, as in [ft_add_dir_template()].
+#' @param with Optional named character vector of template-local regex
+#'   definitions, as in [ft_add_dir_template()].
+#' @return The updated `filetree` object.
+#' @export
+ft_ignore_dir_template <- function(
+  ft,
+  layer,
+  template,
+  when = NULL,
+  with = NULL
+) {
+  .ft_check_filetree(ft)
+  if (
+    !is.character(layer) ||
+      length(layer) != 1 ||
+      is.na(layer) ||
+      !nzchar(layer) ||
+      !layer %in% names(ft$ignore_dir_templates)
+  ) {
+    .ft_abort_arg(
+      "layer",
+      paste0(
+        "must be one of the directory layers: ",
+        .ft_collapse_or(names(ft$ignore_dir_templates)),
+        "."
+      )
+    )
+  }
+
+  templates <- .ft_normalize_templates(template)
+  when <- .ft_normalize_when(when)
+  with <- .ft_normalize_local_regex(with)
+  regex_pool <- .ft_merge_regex_pool(with, ft$regex_pool)
+  compiled <- lapply(templates, .ft_compile_template, regex_pool = regex_pool)
+
+  existing <- ft$ignore_dir_templates[[layer]]
+  ft$ignore_dir_templates[[layer]] <- .ft_add_template_specs(
+    existing,
+    templates,
+    compiled,
+    when,
+    with,
+    regex_pool,
+    base_regex_pool = ft$regex_pool
+  )
+  ft
+}
+
+#' Register ignored file-name templates for a layer
+#'
+#' Compile named component templates that identify files to ignore. Ignored
+#' files are excluded from [ft_list()] and [ft_index()] unless
+#' `include_ignored = TRUE`.
+#'
+#' @param ft A `filetree` object.
+#' @param layer Layer at which the files live (must be listed in `ft$layers`).
+#' @param template Named character vector of full-string file-name component
+#'   templates.
+#' @param when Optional named character vector or named list of exact-match
+#'   conditions, as in [ft_add_file_template()].
+#' @param with Optional named character vector of template-local regex
+#'   definitions, as in [ft_add_file_template()].
+#' @return The updated `filetree` object.
+#' @export
+ft_ignore_file_template <- function(
+  ft,
+  layer,
+  template,
+  when = NULL,
+  with = NULL
+) {
+  .ft_check_filetree(ft)
+  if (
+    !is.character(layer) ||
+      length(layer) != 1 ||
+      is.na(layer) ||
+      !nzchar(layer) ||
+      !layer %in% ft$layers
+  ) {
+    .ft_abort_arg(
+      "layer",
+      paste0(
+        "must be one of the configured layers: ",
+        .ft_collapse_or(ft$layers),
+        "."
+      )
+    )
+  }
+
+  templates <- .ft_normalize_templates(template)
+  when <- .ft_normalize_when(when)
+  with <- .ft_normalize_local_regex(with)
+  regex_pool <- .ft_merge_regex_pool(with, ft$regex_pool)
+  compiled <- lapply(templates, .ft_compile_template, regex_pool = regex_pool)
+
+  existing <- ft$ignore_file_templates[[layer]]
+  if (!(is.null(existing) || length(existing) == 0)) {
+    names(templates) <- .ft_unique_template_names(
+      names(templates),
+      names(existing$raw)
+    )
+    names(compiled) <- names(templates)
+  }
+  ft$ignore_file_templates[[layer]] <- .ft_add_template_specs(
+    existing,
+    templates,
+    compiled,
+    when,
+    with,
+    regex_pool,
+    base_regex_pool = ft$regex_pool
+  )
+  ft
+}
+
+.ft_has_ignore_templates <- function(ft) {
+  has_dir <- any(vapply(
+    ft$ignore_dir_templates,
+    function(x) !(is.null(x) || length(x) == 0),
+    logical(1)
+  ))
+  has_file <- any(vapply(
+    ft$ignore_file_templates,
+    function(x) !(is.null(x) || length(x) == 0),
+    logical(1)
+  ))
+  has_dir || has_file
+}
+
+.ft_path_table <- function(ft, files) {
+  path_info <- .ft_path_rel(files, ft$root)
+  rel <- path_info$rel
+  parts_list <- strsplit(rel, "/", fixed = TRUE)
+
+  layers <- ft$layers
+  dir_layers <- if (length(layers) >= 2) {
+    layers[-length(layers)]
+  } else {
+    character()
+  }
+  layer_cols <- paste0("layer__", layers)
+
+  layer_mat <- matrix(
+    NA_character_,
+    nrow = length(parts_list),
+    ncol = length(layers)
+  )
+  colnames(layer_mat) <- layer_cols
+
+  at_layer <- character(length(parts_list))
+  for (i in seq_along(parts_list)) {
+    parts <- parts_list[[i]]
+    n_parts <- length(parts)
+    fname <- parts[[n_parts]]
+
+    n_dir <- max(n_parts - 1L, 0L)
+    if (n_dir > 0L && length(dir_layers) > 0L) {
+      n_fill <- min(n_dir, length(dir_layers))
+      layer_mat[i, seq_len(n_fill)] <- parts[seq_len(n_fill)]
+    }
+    layer_mat[i, length(layers)] <- fname
+
+    idx <- n_dir + 1L
+    at_layer[[i]] <- if (idx > length(layers)) {
+      ".__too_deep__"
+    } else {
+      layers[[idx]]
+    }
+  }
+
+  tbl <- tibble::tibble(
+    .path = files,
+    .rel = rel,
+    at_layer = at_layer
+  ) |>
+    dplyr::bind_cols(tibble::as_tibble(layer_mat))
+
+  list(
+    tbl = tbl,
+    path_info = path_info,
+    parts_list = parts_list,
+    dir_layers = dir_layers,
+    layer_cols = layer_cols
+  )
+}
+
+.ft_add_placeholder_columns <- function(tbl, placeholders) {
+  for (nm in placeholders) {
+    if (is.null(tbl[[nm]])) {
+      tbl[[nm]] <- NA_character_
+    }
+  }
+  tbl
+}
+
+.ft_apply_dir_captures_for_matching <- function(tbl, ft, active) {
+  dir_layers <- ft$layers[-length(ft$layers)]
+  placeholders <- .ft_all_placeholder_names(ft)
+  tbl <- .ft_add_placeholder_columns(tbl, placeholders)
+
+  for (layer in dir_layers) {
+    raw_vals <- tbl[[paste0("layer__", layer)]]
+    spec <- ft$dir_templates[[layer]]
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
+
+    layer_active <- active & !is.na(raw_vals)
+    if (!any(layer_active)) {
+      next
+    }
+
+    matched <- rep(FALSE, nrow(tbl))
+    for (template_i in seq_along(spec$compiled)) {
+      when <- spec$when[[template_i]]
+      template_rows <- layer_active & .ft_when_matches(tbl, when)
+      if (!any(template_rows)) {
+        next
+      }
+
+      m <- stringr::str_match(raw_vals, spec$compiled[[template_i]])
+      m <- .ft_restore_capture_names(m, spec$compiled[[template_i]])
+      ok <- template_rows & !is.na(m[, 1]) & !matched
+      if (!any(ok)) {
+        next
+      }
+
+      cap_names <- setdiff(colnames(m), "")
+      for (cn in cap_names) {
+        if (is.null(tbl[[cn]])) {
+          tbl[[cn]] <- NA_character_
+        }
+        vals <- m[, cn]
+        replace_idx <- ok & !is.na(vals) & is.na(tbl[[cn]])
+        tbl[[cn]][replace_idx] <- as.character(unname(vals[replace_idx]))
+      }
+      matched <- matched | ok
+    }
+  }
+
+  tbl
+}
+
+.ft_candidate_file_layers_for_row <- function(ft, tbl, row) {
+  dir_layer_cols <- paste0("layer__", ft$layers[-length(ft$layers)])
+  n_dir <- if (length(dir_layer_cols)) {
+    sum(!is.na(tbl[row, dir_layer_cols, drop = TRUE]))
+  } else {
+    0L
+  }
+  .ft_candidate_file_layers(ft, n_dir)
+}
+
+.ft_classify_ignored <- function(tbl, ft, active) {
+  n <- nrow(tbl)
+  ignored <- rep(FALSE, n)
+  ignore_template <- rep(NA_character_, n)
+  ignore_type <- rep(NA_character_, n)
+
+  if (!.ft_has_ignore_templates(ft)) {
+    return(list(
+      ignored = ignored,
+      ignore_template = ignore_template,
+      ignore_type = ignore_type
+    ))
+  }
+
+  match_tbl <- .ft_apply_dir_captures_for_matching(tbl, ft, active)
+
+  for (layer in names(ft$ignore_dir_templates)) {
+    spec <- ft$ignore_dir_templates[[layer]]
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
+
+    raw_vals <- match_tbl[[paste0("layer__", layer)]]
+    layer_rows <- active & !ignored & !is.na(raw_vals)
+    if (!any(layer_rows)) {
+      next
+    }
+
+    for (template_i in seq_along(spec$compiled)) {
+      template_rows <- layer_rows & .ft_when_matches(match_tbl, spec$when[[template_i]])
+      if (!any(template_rows)) {
+        next
+      }
+
+      m <- stringr::str_match(raw_vals, spec$compiled[[template_i]])
+      ok <- template_rows & !is.na(m[, 1]) & !ignored
+      if (!any(ok)) {
+        next
+      }
+
+      ignored[ok] <- TRUE
+      ignore_template[ok] <- names(spec$compiled)[[template_i]]
+      ignore_type[ok] <- "dir"
+    }
+  }
+
+  file_name <- match_tbl[[paste0("layer__", ft$layers[[length(ft$layers)]])]]
+  for (row in which(active & !ignored)) {
+    candidates <- .ft_candidate_file_layers_for_row(ft, match_tbl, row)
+    for (layer in candidates) {
+      spec <- ft$ignore_file_templates[[layer]]
+      if (is.null(spec) || length(spec) == 0) {
+        next
+      }
+
+      row_tbl <- match_tbl[row, , drop = FALSE]
+      for (template_i in seq_along(spec$compiled)) {
+        if (!.ft_when_matches(row_tbl, spec$when[[template_i]])) {
+          next
+        }
+
+        m <- stringr::str_match(file_name[[row]], spec$compiled[[template_i]])
+        if (is.na(m[, 1])) {
+          next
+        }
+
+        ignored[[row]] <- TRUE
+        ignore_template[[row]] <- names(spec$compiled)[[template_i]]
+        ignore_type[[row]] <- "file"
+        break
+      }
+      if (ignored[[row]]) {
+        break
+      }
+    }
+  }
+
+  list(
+    ignored = ignored,
+    ignore_template = ignore_template,
+    ignore_type = ignore_type
+  )
+}
+
 # ---- file enumeration ----
 
 #' List files under the filetree root
@@ -857,6 +1302,8 @@ ft_add_file_template <- function(
 #' Return all files under the filetree root using the configured `fs` helper.
 #'
 #' @param ft A `filetree` object.
+#' @param include_ignored Logical. If `TRUE`, return files that match ignored
+#'   file or directory templates. If `FALSE`, ignored files are pruned.
 #' @return An `fs_path` character vector of file paths under `ft$root`.
 #' @examples
 #' root <- system.file("demo-1", package = "filetree")
@@ -865,9 +1312,28 @@ ft_add_file_template <- function(
 #'
 #' head(ft_list(ft))
 #' @export
-ft_list <- function(ft) {
+ft_list <- function(ft, include_ignored = FALSE) {
   .ft_check_filetree(ft)
-  fs::dir_ls(ft$root, recurse = TRUE, type = "file")
+  if (
+    !is.logical(include_ignored) ||
+      length(include_ignored) != 1 ||
+      is.na(include_ignored)
+  ) {
+    .ft_abort_arg("include_ignored", "must be `TRUE` or `FALSE`.")
+  }
+
+  files <- fs::dir_ls(ft$root, recurse = TRUE, type = "file")
+  if (include_ignored || !length(files) || !.ft_has_ignore_templates(ft)) {
+    return(files)
+  }
+
+  path_data <- .ft_path_table(ft, files)
+  path_info <- path_data$path_info
+  active <- path_info$under_root &
+    !path_info$at_root &
+    path_data$tbl$at_layer != ".__too_deep__"
+  ignore <- .ft_classify_ignored(path_data$tbl, ft, active)
+  files[!ignore$ignored]
 }
 
 # ---- indexing / parsing / validation ----
@@ -944,6 +1410,8 @@ ft_list <- function(ft) {
 #' @param strict Logical. If `TRUE`, files at layers without registered file
 #'   templates are reported as problems. If `FALSE`, missing file templates are
 #'   accepted so partial schemas can be used for exploratory indexing.
+#' @param include_ignored Logical. If `TRUE`, include ignored files as inert
+#'   audit rows. If `FALSE`, ignored files are pruned before validation.
 #' @return A tibble with `.path`, `.rel`, `at_layer`, layer columns
 #'   (`layer__<name>`), captured placeholders, the matched template name, `.ok`
 #'   flag, and `.problems` list-column.
@@ -973,64 +1441,35 @@ ft_list <- function(ft) {
 #' ft_index(ft_partial)
 #' ft_index(ft_partial, strict = TRUE)
 #' @export
-ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
+ft_index <- function(
+  ft,
+  files = ft_list(ft, include_ignored = include_ignored),
+  strict = FALSE,
+  include_ignored = FALSE
+) {
   .ft_check_filetree(ft)
   if (!is.logical(strict) || length(strict) != 1 || is.na(strict)) {
     .ft_abort_arg("strict", "must be `TRUE` or `FALSE`.")
   }
+  if (
+    !is.logical(include_ignored) ||
+      length(include_ignored) != 1 ||
+      is.na(include_ignored)
+  ) {
+    .ft_abort_arg("include_ignored", "must be `TRUE` or `FALSE`.")
+  }
 
-  path_info <- .ft_path_rel(files, ft$root)
-  rel <- path_info$rel
+  path_data <- .ft_path_table(ft, files)
+  path_info <- path_data$path_info
   outside_root <- !path_info$under_root
   at_or_above_root <- path_info$at_root | outside_root
-  parts_list <- strsplit(rel, "/", fixed = TRUE)
 
   layers <- ft$layers
-  dir_layers <- if (length(layers) >= 2) {
-    layers[-length(layers)]
-  } else {
-    character()
-  }
+  dir_layers <- path_data$dir_layers
   file_layer <- layers[length(layers)]
 
-  layer_cols <- paste0("layer__", layers)
-
-  # build one column per layer name (raw component), including final file-name layer
-  layer_mat <- matrix(
-    NA_character_,
-    nrow = length(parts_list),
-    ncol = length(layers)
-  )
-  colnames(layer_mat) <- layer_cols
-
-  at_layer <- character(length(parts_list))
-
-  for (i in seq_along(parts_list)) {
-    parts <- parts_list[[i]]
-    n_parts <- length(parts)
-    fname <- parts[[n_parts]]
-
-    n_dir <- max(n_parts - 1L, 0L)
-    if (n_dir > 0L && length(dir_layers) > 0L) {
-      n_fill <- min(n_dir, length(dir_layers))
-      layer_mat[i, seq_len(n_fill)] <- parts[seq_len(n_fill)]
-    }
-    layer_mat[i, length(layers)] <- fname
-
-    idx <- n_dir + 1L
-    at_layer[[i]] <- if (idx > length(layers)) {
-      ".__too_deep__"
-    } else {
-      layers[[idx]]
-    }
-  }
-
-  tbl <- tibble::tibble(
-    .path = files,
-    .rel = rel,
-    at_layer = at_layer
-  ) |>
-    dplyr::bind_cols(tibble::as_tibble(layer_mat))
+  layer_cols <- path_data$layer_cols
+  tbl <- path_data$tbl
 
   # extracted fields = placeholders not in layers (but captures may include layer names too;
   # those should become extracted fields columns, not collide with layer__ columns)
@@ -1040,9 +1479,7 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
   # even if a placeholder name equals a layer name, it is still an extracted field column,
   # because the raw layer component is stored in layer__<layer>.
   if (length(all_placeholders)) {
-    for (nm in all_placeholders) {
-      if (is.null(tbl[[nm]])) tbl[[nm]] <- NA_character_
-    }
+    tbl <- .ft_add_placeholder_columns(tbl, all_placeholders)
   }
 
   n <- nrow(tbl)
@@ -1128,6 +1565,22 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
     }
   }
   active <- !(too_deep | bad_root)
+
+  ignore <- .ft_classify_ignored(tbl, ft, active)
+  if (!include_ignored && any(ignore$ignored)) {
+    keep <- !ignore$ignored
+    tbl <- tbl[keep, , drop = FALSE]
+    at_or_above_root <- at_or_above_root[keep]
+    problems <- problems[keep]
+    matched_template <- matched_template[keep]
+    active <- active[keep]
+    n <- nrow(tbl)
+  } else if (include_ignored) {
+    tbl$.ignored <- ignore$ignored
+    tbl$.ignore_template <- ignore$ignore_template
+    tbl$.ignore_type <- ignore$ignore_type
+    active <- active & !tbl$.ignored
+  }
 
   # ---- validate / extract from directory names (dir_layers only) ----
   for (layer in dir_layers) {
@@ -1299,7 +1752,11 @@ ft_index <- function(ft, files = ft_list(ft), strict = FALSE) {
 
   # order columns: raw layer__ columns, then extracted fields, then diagnostics
   core <- c(".path", ".rel", "at_layer", layer_cols)
-  diag <- c("template", ".ok", ".problems")
+  diag <- c("template")
+  if (include_ignored) {
+    diag <- c(diag, ".ignored", ".ignore_template", ".ignore_type")
+  }
+  diag <- c(diag, ".ok", ".problems")
   extracted <- setdiff(names(tbl), c(core, diag))
   tbl <- tbl[, c(core, extracted, diag)]
 
@@ -1584,11 +2041,21 @@ ft_format_schema_tree <- function(ft) {
   if (!length(dir_layers)) {
     return(c(
       lines,
-      .ft_format_schema_items(.ft_format_file_schema(ft, layers[[1]]), "")
+      .ft_format_schema_items(
+        c(
+          .ft_format_file_schema(ft, layers[[1]]),
+          .ft_format_ignore_file_schema(ft, layers[[1]])
+        ),
+        ""
+      )
     ))
   }
 
-  root_file_lines <- .ft_format_file_schema(ft, layers[[1]])
+  root_file_lines <- c(
+    .ft_format_file_schema(ft, layers[[1]]),
+    .ft_format_ignore_file_schema(ft, layers[[1]]),
+    .ft_format_ignore_dir_schema(ft, layers[[1]])
+  )
   dir_lines <- .ft_format_schema_dir(ft, 1L, "", has_following = FALSE)
   c(
     lines,
@@ -1686,6 +2153,52 @@ ft_schema_tree <- function(ft) {
   out
 }
 
+.ft_format_ignore_dir_schema <- function(ft, layer) {
+  spec <- ft$ignore_dir_templates[[layer]]
+  if (is.null(spec) || length(spec) == 0) {
+    return(character())
+  }
+
+  paste0("ignored `", layer, "` dir: ", .ft_format_template_spec(spec))
+}
+
+.ft_format_ignore_file_schema <- function(ft, layer) {
+  spec <- ft$ignore_file_templates[[layer]]
+  if (is.null(spec) || length(spec) == 0) {
+    return(character())
+  }
+
+  paste0("ignored `", layer, "` file: ", .ft_format_template_spec(spec))
+}
+
+.ft_format_template_spec <- function(spec) {
+  template_labels <- character(length(spec$raw))
+  for (i in seq_along(spec$raw)) {
+    nm <- names(spec$raw)[[i]]
+    template_label <- if (identical(nm, "default") && length(spec$raw) == 1) {
+      unname(spec$raw[[i]])
+    } else {
+      paste0(nm, " = ", unname(spec$raw[[i]]))
+    }
+    annotations <- c(
+      .ft_format_when_annotation(spec$when[[i]]),
+      .ft_format_with_annotation(spec$with[[i]])
+    )
+    annotations <- annotations[nzchar(annotations)]
+    if (length(annotations)) {
+      template_label <- paste0(
+        template_label,
+        " [",
+        paste(annotations, collapse = "; "),
+        "]"
+      )
+    }
+    template_labels[[i]] <- template_label
+  }
+
+  paste(template_labels, collapse = " | ")
+}
+
 .ft_format_schema_dir <- function(ft, dir_i, prefix, has_following = FALSE) {
   dir_layers <- ft$layers[-length(ft$layers)]
   layer <- dir_layers[[dir_i]]
@@ -1699,7 +2212,11 @@ ft_schema_tree <- function(ft) {
   child_prefix <- paste0(prefix, if (has_following) "\u2502   " else "    ")
 
   child_layer <- ft$layers[[dir_i + 1L]]
-  file_lines <- .ft_format_file_schema(ft, child_layer)
+  file_lines <- c(
+    .ft_format_file_schema(ft, child_layer),
+    .ft_format_ignore_file_schema(ft, child_layer),
+    .ft_format_ignore_dir_schema(ft, child_layer)
+  )
   next_lines <- if (dir_i < length(dir_layers)) {
     .ft_format_schema_dir(ft, dir_i + 1L, child_prefix)
   } else {
@@ -1850,6 +2367,66 @@ format.filetree <- function(x, ..., width = getOption("width")) {
     lines <- c(lines, "  file_templates:")
     for (layer in names(x$file_templates)) {
       spec <- x$file_templates[[layer]]
+      if (is.null(spec) || length(spec) == 0) {
+        next
+      }
+      kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
+      s <- paste(kv, collapse = ", ")
+      if (nchar(s) > 90) {
+        s <- paste0(substr(s, 1, 87), "\u2026")
+      }
+      lines <- c(lines, sprintf("    - at_layer=%s: %s", layer, s))
+    }
+  }
+
+  # ignored dir templates
+  if (length(dir_layers) == 0) {
+    lines <- c(lines, "  ignore_dir_templates: <none> (no dir layers)")
+  } else {
+    any_ignore_dir <- any(vapply(
+      dir_layers,
+      function(layer) {
+        spec <- x$ignore_dir_templates[[layer]]
+        !(is.null(spec) || length(spec) == 0)
+      },
+      logical(1)
+    ))
+
+    if (!any_ignore_dir) {
+      lines <- c(lines, "  ignore_dir_templates: <none>")
+    } else {
+      lines <- c(lines, "  ignore_dir_templates:")
+      for (layer in dir_layers) {
+        spec <- x$ignore_dir_templates[[layer]]
+        if (is.null(spec) || length(spec) == 0) {
+          next
+        }
+        kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
+        s <- paste(kv, collapse = ", ")
+        if (nchar(s) > 90) {
+          s <- paste0(substr(s, 1, 87), "\u2026")
+        }
+        lines <- c(lines, sprintf("    - %s: %s", layer, s))
+      }
+    }
+  }
+
+  # ignored file templates
+  any_ignore_file <- any(vapply(
+    names(x$ignore_file_templates),
+    function(layer) {
+      spec <- x$ignore_file_templates[[layer]]
+      !(is.null(spec) || length(spec) == 0)
+    },
+    logical(1)
+  ))
+
+  if (!any_ignore_file) {
+    lines <- c(lines, "  ignore_file_templates: <none>")
+  } else {
+    lines <- c(lines, "  ignore_file_templates:")
+    for (layer in names(x$ignore_file_templates)) {
+      spec <- x$ignore_file_templates[[layer]]
       if (is.null(spec) || length(spec) == 0) {
         next
       }
