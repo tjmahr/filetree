@@ -130,11 +130,14 @@ test_that("template registration overwrites existing names and recompiles after 
       template = c(main = "{subject}")
     )
 
-  ft_overwrite <- ft_overwrite |>
-    ft_add_dir_template(
-      layer = "subject",
-      template = c(main = "{time}")
-    )
+  expect_warning(
+    ft_overwrite <- ft_overwrite |>
+      ft_add_dir_template(
+        layer = "subject",
+        template = c(main = "{time}")
+      ),
+    "already registered"
+  )
 
   expect_equal(ft_overwrite$dir_templates$subject$raw[["main"]], "{time}")
   compiled <- ft_overwrite$dir_templates$subject$compiled[["main"]]
@@ -147,6 +150,34 @@ test_that("template registration overwrites existing names and recompiles after 
   compiled <- ft_overwrite$dir_templates$subject$compiled[["main"]]
   expect_equal(as.character(compiled), "^(?<ftcap1>(?:day\\d{3}))$")
   expect_equal(attr(compiled, "capture_names"), c(ftcap1 = "time"))
+})
+
+test_that("unnamed directory template replacement warns", {
+  ft_default <- ft_init(
+    root = root1,
+    layers = c("subject", "time", "data")
+  )
+
+  ft_default <- ft_default |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "day\\d{2}"
+    )) |>
+    ft_add_dir_template(
+      layer = "subject",
+      template = "{subject}"
+    )
+
+  expect_warning(
+    ft_default <- ft_default |>
+      ft_add_dir_template(
+        layer = "subject",
+        template = "{time}"
+      ),
+    "default"
+  )
+
+  expect_equal(ft_default$dir_templates$subject$raw[["default"]], "{time}")
 })
 
 test_that("Regex pool anchors match layer boundaries when composed", {

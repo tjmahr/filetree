@@ -136,6 +136,11 @@ This supports cases such as ordinary files on days 1 and 2, but a different
 allowed task value on day 3, or different directory naming conventions under
 different parent directories.
 
+Directory template registration is keyed by template name within a layer.
+Registering another directory template with the same name replaces the earlier
+template and warns. Use explicit unique names to keep alternative directory
+templates on the same layer.
+
 Public template APIs accept either layer names or positive integer layer
 positions. Layer `1` is the first configured layer in `ft$layers`; layer `0` is
 the implicit root layer and is not accepted by the current template APIs.

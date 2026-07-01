@@ -706,6 +706,14 @@ ft_add_regex <- function(ft, regexes) {
     names(existing_regex_pool) <- names(existing$raw)
   }
 
+  duplicate_names <- intersect(names(templates), names(existing$raw))
+  if (length(duplicate_names) > 0) {
+    cli::cli_warn(c(
+      "Template {.val {duplicate_names}} is already registered at this layer.",
+      "i" = "The existing template will be replaced. Use unique template names to keep multiple templates."
+    ))
+  }
+
   out <- list(
     raw = c(existing$raw, templates),
     compiled = c(existing$compiled, compiled),
