@@ -136,6 +136,13 @@ This supports cases such as ordinary files on days 1 and 2, but a different
 allowed task value on day 3, or different directory naming conventions under
 different parent directories.
 
+Public template APIs accept either layer names or positive integer layer
+positions. Layer `1` is the first configured layer in `ft$layers`; layer `0` is
+the implicit root layer and is not accepted by the current template APIs.
+Integer references are normalized to canonical layer names at the public API
+boundary, so object storage, diagnostics, schema display, and index output
+remain name-based.
+
 Ignored directory and file templates use the same full-component template
 language and the same `when` and `with` arguments. They classify paths as
 outside the validation contract. Ignored directory templates have subtree
@@ -280,6 +287,7 @@ Current local test guidance from project notes: `devtools::document()`,
 | template compilation | `R/filetree.R` | `.ft_placeholders()`, `.ft_compile_template()`, `.ft_expand_pool_regex()`, `.ft_recompile_templates()` |
 | Conditional matching | `R/filetree.R` | `.ft_normalize_when()`, `.ft_when_matches()`, `.ft_file_template_matches()` |
 | File-layer resolution | `R/filetree.R` | `.ft_at_layer_from_parts()`, `.ft_candidate_file_layers()`, `.ft_resolve_file_layers()` |
+| Layer resolution | `R/filetree.R` | `.ft_resolve_layer()`, `.ft_is_integerish()` |
 | Ignore classification | `R/filetree.R` | `.ft_classify_ignored()`, `.ft_has_ignore_templates()` |
 | Diagnostics | `R/filetree.R` | `ft_glimpse_problems()`, `.ft_validate_index()` |
 | Schema display | `R/filetree.R` | `ft_format_schema_tree()`, `ft_schema_tree()`, `.ft_format_schema_dir()` |
@@ -292,6 +300,7 @@ Current local test guidance from project notes: `devtools::document()`,
 | Term | Meaning |
 | --- | --- |
 | layer | A named level of the expected path hierarchy. The final layer represents file names. |
+| integer layer reference | A positive integer position into `ft$layers`; `1` is the first configured layer, while `0` is the implicit inaccessible root. |
 | directory layer | Any layer before the final file-name layer. |
 | file template | A full-string component template that validates and extracts metadata from a file name at a specific layer. |
 | directory template | A full-string component template that validates and extracts metadata from a directory name at a specific layer. |

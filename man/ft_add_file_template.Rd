@@ -9,7 +9,9 @@ ft_add_file_template(ft, layer, template, when = NULL, with = NULL)
 \arguments{
 \item{ft}{A \code{filetree} object.}
 
-\item{layer}{Layer at which the files live (must be listed in \code{ft$layers}).}
+\item{layer}{Layer name or positive integer position where the files live
+(must refer to one of \code{ft$layers}). Layer 1 is the first configured layer;
+layer 0 is the implicit root and cannot be used here.}
 
 \item{template}{Named character vector of full-string file-name component
 templates using fixed text and \code{{placeholder}} references tied to \code{ft}'s

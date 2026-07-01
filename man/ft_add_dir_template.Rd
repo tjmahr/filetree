@@ -9,7 +9,9 @@ ft_add_dir_template(ft, layer, template, when = NULL, with = NULL)
 \arguments{
 \item{ft}{A \code{filetree} object.}
 
-\item{layer}{Directory layer name (must be one of the non-file layers).}
+\item{layer}{Directory layer name or positive integer position (must refer to
+one of the non-file layers). Layer 1 is the first configured layer; layer 0
+is the implicit root and cannot be used here.}
 
 \item{template}{Named character vector of full-string component templates
 using fixed text and \code{{placeholder}} references that point into \code{ft}'s

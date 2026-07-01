@@ -33,6 +33,72 @@
   paste0(paste(x[-length(x)], collapse = ", "), " or ", x[[length(x)]])
 }
 
+.ft_is_integerish <- function(x) {
+  is.numeric(x) &&
+    length(x) == 1 &&
+    !is.na(x) &&
+    is.finite(x) &&
+    x == floor(x)
+}
+
+.ft_layer_error_message <- function(allowed, label, max_index) {
+  paste0(
+    "must be one of the ",
+    label,
+    ": ",
+    .ft_collapse_or(allowed),
+    ", or an integer from 1 to ",
+    max_index,
+    "."
+  )
+}
+
+.ft_resolve_layer <- function(ft, layer, allowed, label, call = rlang::caller_env()) {
+  max_index <- length(allowed)
+
+  if (is.character(layer)) {
+    if (
+      length(layer) != 1 ||
+        is.na(layer) ||
+        !nzchar(layer) ||
+        !layer %in% allowed
+    ) {
+      .ft_abort_arg(
+        "layer",
+        .ft_layer_error_message(allowed, label, max_index),
+        call = call
+      )
+    }
+    return(layer)
+  }
+
+  if (!.ft_is_integerish(layer)) {
+    .ft_abort_arg(
+      "layer",
+      "must be a layer name or a whole-number layer position.",
+      call = call
+    )
+  }
+
+  layer <- as.integer(layer)
+  if (identical(layer, 0L)) {
+    .ft_abort_arg(
+      "layer",
+      "0 is the implicit root layer and cannot be used here.",
+      call = call
+    )
+  }
+  if (layer < 1L || layer > max_index) {
+    .ft_abort_arg(
+      "layer",
+      .ft_layer_error_message(allowed, label, max_index),
+      call = call
+    )
+  }
+
+  allowed[[layer]]
+}
+
 # ---- constructors ----
 
 #' Create a filetree specification
@@ -775,7 +841,9 @@ ft_add_regex <- function(ft, regexes) {
 #' not `day01b`.
 #'
 #' @param ft A `filetree` object.
-#' @param layer Directory layer name (must be one of the non-file layers).
+#' @param layer Directory layer name or positive integer position (must refer to
+#'   one of the non-file layers). Layer 1 is the first configured layer; layer 0
+#'   is the implicit root and cannot be used here.
 #' @param template Named character vector of full-string component templates
 #'   using fixed text and `{placeholder}` references that point into `ft`'s
 #'   `regex_pool`.
@@ -808,22 +876,12 @@ ft_add_dir_template <- function(
   with = NULL
 ) {
   .ft_check_filetree(ft)
-  if (
-    !is.character(layer) ||
-      length(layer) != 1 ||
-      is.na(layer) ||
-      !nzchar(layer) ||
-      !layer %in% names(ft$dir_templates)
-  ) {
-    .ft_abort_arg(
-      "layer",
-      paste0(
-        "must be one of the directory layers: ",
-        .ft_collapse_or(names(ft$dir_templates)),
-        "."
-      )
-    )
-  }
+  layer <- .ft_resolve_layer(
+    ft,
+    layer,
+    allowed = names(ft$dir_templates),
+    label = "directory layers"
+  )
 
   templates <- .ft_normalize_templates(template)
   when <- .ft_normalize_when(when)
@@ -858,7 +916,9 @@ ft_add_dir_template <- function(
 #' such as subject-level manifests can live beside child directories.
 #'
 #' @param ft A `filetree` object.
-#' @param layer Layer at which the files live (must be listed in `ft$layers`).
+#' @param layer Layer name or positive integer position where the files live
+#'   (must refer to one of `ft$layers`). Layer 1 is the first configured layer;
+#'   layer 0 is the implicit root and cannot be used here.
 #' @param template Named character vector of full-string file-name component
 #'   templates using fixed text and `{placeholder}` references tied to `ft`'s
 #'   regex pool.
@@ -901,22 +961,12 @@ ft_add_file_template <- function(
   with = NULL
 ) {
   .ft_check_filetree(ft)
-  if (
-    !is.character(layer) ||
-      length(layer) != 1 ||
-      is.na(layer) ||
-      !nzchar(layer) ||
-      !layer %in% ft$layers
-  ) {
-    .ft_abort_arg(
-      "layer",
-      paste0(
-        "must be one of the configured layers: ",
-        .ft_collapse_or(ft$layers),
-        "."
-      )
-    )
-  }
+  layer <- .ft_resolve_layer(
+    ft,
+    layer,
+    allowed = ft$layers,
+    label = "configured layers"
+  )
 
   templates <- .ft_normalize_templates(template)
   when <- .ft_normalize_when(when)
@@ -954,7 +1004,9 @@ ft_add_file_template <- function(
 #' `include_ignored = TRUE`.
 #'
 #' @param ft A `filetree` object.
-#' @param layer Directory layer name (must be one of the non-file layers).
+#' @param layer Directory layer name or positive integer position (must refer to
+#'   one of the non-file layers). Layer 1 is the first configured layer; layer 0
+#'   is the implicit root and cannot be used here.
 #' @param template Named character vector of full-string component templates.
 #' @param when Optional named character vector or named list of exact-match
 #'   conditions, as in [ft_add_dir_template()].
@@ -970,22 +1022,12 @@ ft_ignore_dir_template <- function(
   with = NULL
 ) {
   .ft_check_filetree(ft)
-  if (
-    !is.character(layer) ||
-      length(layer) != 1 ||
-      is.na(layer) ||
-      !nzchar(layer) ||
-      !layer %in% names(ft$ignore_dir_templates)
-  ) {
-    .ft_abort_arg(
-      "layer",
-      paste0(
-        "must be one of the directory layers: ",
-        .ft_collapse_or(names(ft$ignore_dir_templates)),
-        "."
-      )
-    )
-  }
+  layer <- .ft_resolve_layer(
+    ft,
+    layer,
+    allowed = names(ft$ignore_dir_templates),
+    label = "directory layers"
+  )
 
   templates <- .ft_normalize_templates(template)
   when <- .ft_normalize_when(when)
@@ -1013,7 +1055,9 @@ ft_ignore_dir_template <- function(
 #' `include_ignored = TRUE`.
 #'
 #' @param ft A `filetree` object.
-#' @param layer Layer at which the files live (must be listed in `ft$layers`).
+#' @param layer Layer name or positive integer position where the files live
+#'   (must refer to one of `ft$layers`). Layer 1 is the first configured layer;
+#'   layer 0 is the implicit root and cannot be used here.
 #' @param template Named character vector of full-string file-name component
 #'   templates.
 #' @param when Optional named character vector or named list of exact-match
@@ -1030,22 +1074,12 @@ ft_ignore_file_template <- function(
   with = NULL
 ) {
   .ft_check_filetree(ft)
-  if (
-    !is.character(layer) ||
-      length(layer) != 1 ||
-      is.na(layer) ||
-      !nzchar(layer) ||
-      !layer %in% ft$layers
-  ) {
-    .ft_abort_arg(
-      "layer",
-      paste0(
-        "must be one of the configured layers: ",
-        .ft_collapse_or(ft$layers),
-        "."
-      )
-    )
-  }
+  layer <- .ft_resolve_layer(
+    ft,
+    layer,
+    allowed = ft$layers,
+    label = "configured layers"
+  )
 
   templates <- .ft_normalize_templates(template)
   when <- .ft_normalize_when(when)

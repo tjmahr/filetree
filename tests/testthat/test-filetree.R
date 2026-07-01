@@ -329,7 +329,7 @@ test_that("Public validators report argument-specific errors", {
   )
   expect_error(
     ft_add_dir_template(ft, "data", "{task}"),
-    "`layer` must be one of the directory layers: subject or time.",
+    "`layer` must be one of the directory layers: subject or time, or an integer from 1 to 2.",
     fixed = TRUE
   )
   expect_error(
@@ -355,6 +355,88 @@ test_that("Public validators report argument-specific errors", {
   expect_error(
     ft_glimpse_problems(ft_index(ft), n = NA),
     "`n` must be a non-negative number.",
+    fixed = TRUE
+  )
+})
+
+test_that("Template APIs accept integer layer references", {
+  ft_integer <- ft_init(root1, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "day\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template(1, "{subject}") |>
+    ft_add_dir_template(2, "{time}") |>
+    ft_add_file_template(3, "{subject}_{task}.txt")
+
+  index <- ft_index(ft_integer)
+
+  expect_true(all(index$.ok))
+  expect_equal(ft_integer$dir_templates$subject$raw[["default"]], "{subject}")
+  expect_equal(ft_integer$dir_templates$time$raw[["default"]], "{time}")
+  expect_equal(ft_integer$file_templates$data$raw[["default"]], "{subject}_{task}.txt")
+
+  ft_ignored <- ft_integer |>
+    ft_ignore_dir_template(2, c(scratch = "tmp")) |>
+    ft_ignore_file_template(3, c(notes = "{subject}_notes.txt"))
+
+  expect_equal(ft_ignored$ignore_dir_templates$time$raw[["scratch"]], "tmp")
+  expect_equal(
+    ft_ignored$ignore_file_templates$data$raw[["notes"]],
+    "{subject}_notes.txt"
+  )
+  expect_true(any(grepl(
+    "ignored `time` dir: scratch = tmp",
+    ft_format_schema_tree(ft_ignored),
+    fixed = TRUE
+  )))
+})
+
+test_that("Integer layer references have clear validation errors", {
+  expect_error(
+    ft_add_dir_template(ft, 0, "{subject}"),
+    "`layer` 0 is the implicit root layer and cannot be used here.",
+    fixed = TRUE
+  )
+  expect_error(
+    ft_add_file_template(ft, 0, "{subject}_{task}.txt"),
+    "`layer` 0 is the implicit root layer and cannot be used here.",
+    fixed = TRUE
+  )
+  expect_error(
+    ft_add_dir_template(ft, 3, "{task}"),
+    "`layer` must be one of the directory layers: subject or time, or an integer from 1 to 2.",
+    fixed = TRUE
+  )
+  expect_error(
+    ft_add_file_template(ft, 4, "{subject}_{task}.txt"),
+    "`layer` must be one of the configured layers: subject, time or data, or an integer from 1 to 3.",
+    fixed = TRUE
+  )
+  expect_error(
+    ft_ignore_dir_template(ft, 1.5, "{subject}"),
+    "`layer` must be a layer name or a whole-number layer position.",
+    fixed = TRUE
+  )
+  expect_error(
+    ft_ignore_file_template(ft, NA_real_, "{subject}_{task}.txt"),
+    "`layer` must be a layer name or a whole-number layer position.",
+    fixed = TRUE
+  )
+  expect_error(
+    ft_add_file_template(ft, Inf, "{subject}_{task}.txt"),
+    "`layer` must be a layer name or a whole-number layer position.",
+    fixed = TRUE
+  )
+  expect_error(
+    ft_add_file_template(ft, c(1, 2), "{subject}_{task}.txt"),
+    "`layer` must be a layer name or a whole-number layer position.",
+    fixed = TRUE
+  )
+  expect_error(
+    ft_add_file_template(ft, "1", "{subject}_{task}.txt"),
+    "`layer` must be one of the configured layers: subject, time or data, or an integer from 1 to 3.",
     fixed = TRUE
   )
 })

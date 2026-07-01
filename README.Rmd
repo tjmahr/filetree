@@ -89,6 +89,15 @@ ft <- ft |>
 ft
 ```
 
+Layer arguments also accept positive integer positions. Layer `1` is the first
+configured layer, while layer `0` is the implicit root and cannot be used for
+template registration.
+
+```{r}
+ft |>
+  ft_add_dir_template(layer = 2, template = "{time}")
+```
+
 We can also view the filetree schema as a tree:
 
 ```{r}

@@ -119,6 +119,26 @@ ft
 #>   ignore_file_templates: <none>
 ```
 
+Layer arguments also accept positive integer positions. Layer `1` is the
+first configured layer, while layer `0` is the implicit root and cannot
+be used for template registration.
+
+``` r
+ft |>
+  ft_add_dir_template(layer = 2, template = "{time}")
+#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
+#>   layers: subject / time / data
+#>   file_layer: data
+#>   regex_pool: 3 (subject, time, task)
+#>   dir_templates:
+#>     - subject: default="{subject}"
+#>     - time: default="{time}"
+#>   file_templates:
+#>     - at_layer=data: default="{subject}_{task}.txt"
+#>   ignore_dir_templates: <none>
+#>   ignore_file_templates: <none>
+```
+
 We can also view the filetree schema as a tree:
 
 ``` r
