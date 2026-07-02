@@ -262,6 +262,16 @@ templates are shown as ignored directory or file entries.
 The R source uses Unicode escape sequences for tree branches rather than literal
 box-drawing characters so the package source remains ASCII-only.
 
+`format.filetree()` uses `cli::cli_format_method()` and returns one character
+element per printed line. `print.filetree()` prints those lines with newline
+separators and invisibly returns the input object. The summary shows the root,
+ordered layers, regex pool, directory templates, file templates, ignored
+directory templates, and ignored file templates. Directory and file template
+rows share the same form, such as
+`` subject: default = `{subject}` `` or
+`` data: default = `{subject}_{task}.txt` ``, with template strings shown in
+backticks. The object summary does not print a separate `file_layer` line.
+
 ## Tests and Examples
 
 Primary regression coverage is in `tests/testthat/test-filetree.R`. The tests
@@ -276,7 +286,8 @@ exercise:
 - placeholder names with underscores;
 - user-facing problem messages;
 - sidecar files registered on parent layers;
-- schema tree formatting.
+- schema tree formatting;
+- S3 `format()` and `print()` output.
 
 Demo file trees live in `inst/demo-1`, `inst/demo-2`, and `inst/demo-3`.
 Additional test fixtures live in `tests/testthat/test-trees`.
@@ -308,7 +319,7 @@ Current local test guidance from project notes: `devtools::document()`,
 
 | Term | Meaning |
 | --- | --- |
-| layer | A named level of the expected path hierarchy. The final layer represents file names. |
+| layer | A named level of the expected path hierarchy that can own directory or file templates. |
 | integer layer reference | A positive integer position into `ft$layers`; `1` is the first configured layer, while `0` is the implicit inaccessible root. |
 | directory layer | Any layer before the final layer; these layers can have directory templates for child paths and file templates for files they own. |
 | file template | A full-string component template that validates and extracts metadata from a file name at a specific layer. |

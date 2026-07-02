@@ -1512,15 +1512,90 @@ test_that("Formatted filetrees summarize ignored templates", {
     ft_ignore_file_template("data", c(notes = "{subject}_notes.txt"))
 
   lines <- format(ft_schema)
+  plain <- cli::ansi_strip(lines)
 
-  expect_true(grepl("ignore_dir_templates:", lines, fixed = TRUE))
-  expect_true(grepl("ignore_file_templates:", lines, fixed = TRUE))
-  expect_true(grepl("subject: scratch=\"tmp\"", lines, fixed = TRUE))
-  expect_true(grepl(
-    "at_layer=data: notes=\"{subject}_notes.txt\"",
-    lines,
+  expect_true(any(grepl("ignore_dir_templates:", plain, fixed = TRUE)))
+  expect_true(any(grepl("ignore_file_templates:", plain, fixed = TRUE)))
+  expect_true(any(grepl(
+    "subject: scratch = `tmp`",
+    plain,
     fixed = TRUE
-  ))
+  )))
+  expect_true(any(grepl(
+    "data: notes = `{subject}_notes.txt`",
+    plain,
+    fixed = TRUE
+  )))
+})
+
+test_that("Formatted filetrees return one element per printed line", {
+  ft_schema <- ft_init("demo-root", c("subject", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}", task = "red|green")) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_file_template("data", "{subject}_{task}.txt")
+
+  lines <- format(ft_schema)
+
+  expect_type(lines, "character")
+  expect_gt(length(lines), 1)
+  expect_false(any(grepl("\n", lines, fixed = TRUE)))
+})
+
+test_that("Printed filetrees emit one line per formatted element", {
+  ft_schema <- ft_init("demo-root", c("subject", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}", task = "red|green")) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_file_template("data", "{subject}_{task}.txt")
+
+  printed <- utils::capture.output(print(ft_schema))
+  formatted <- format(ft_schema)
+
+  expect_equal(printed, formatted)
+})
+
+test_that("Formatted template strings use cli value styling", {
+  ft_schema <- ft_init("demo-root", c("subject", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}", task = "red|green")) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_file_template("data", "{subject}_{task}.txt")
+
+  old_options <- options(cli.num_colors = 8)
+  rendered <- format(ft_schema)
+  options(old_options)
+
+  template_lines <- grep("default =", rendered, value = TRUE)
+  styled <- cli::ansi_strip(template_lines)
+
+  expect_false(identical(styled, template_lines))
+})
+
+test_that("Formatted filetrees use the current layer display contract", {
+  ft_schema <- ft_init("demo-root", c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "day\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_dir_template("time", "{time}") |>
+    ft_add_file_template("data", "{subject}_{task}.txt") |>
+    ft_add_file_template("data", "{subject}_{task}.txt")
+
+  plain <- cli::ansi_strip(format(ft_schema))
+  combined <- paste(plain, collapse = "\n")
+
+  expect_match(combined, "root:", fixed = TRUE)
+  expect_no_match(combined, "root: '", fixed = TRUE)
+  expect_false(any(grepl("file_layer:", plain, fixed = TRUE)))
+  expect_true(any(grepl("layers: subject / time / data", plain, fixed = TRUE)))
+  expect_true(any(grepl("subject: default = `{subject}`", plain, fixed = TRUE)))
+  expect_true(any(grepl("time: default = `{time}`", plain, fixed = TRUE)))
+  expect_true(any(grepl(
+    "data: default = `{subject}_{task}.txt`, default_2 = `{subject}_{task}.txt`",
+    plain,
+    fixed = TRUE
+  )))
+  expect_false(any(grepl("at_layer=", plain, fixed = TRUE)))
 })
 
 test_that("Schema trees hide default template names only for singleton layers", {

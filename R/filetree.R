@@ -2354,146 +2354,139 @@ format.filetree <- function(x, ..., width = getOption("width")) {
   } else {
     character()
   }
-  file_layer <- layers[length(layers)]
-
-  lines <- character()
-  lines <- c(lines, sprintf("<filetree> root: %s", x$root))
-  lines <- c(lines, sprintf("  layers: %s", paste(layers, collapse = " / ")))
-  lines <- c(lines, sprintf("  file_layer: %s", file_layer))
-
-  pool_names <- names(x$regex_pool)
-  if (length(pool_names) == 0) {
-    lines <- c(lines, "  regex_pool: <empty>")
-  } else {
-    shown <- paste(pool_names, collapse = ", ")
-    lines <- c(
-      lines,
-      sprintf("  regex_pool: %d (%s)", length(pool_names), shown)
+  has_templates <- function(templates, layer) {
+    spec <- templates[[layer]]
+    !(is.null(spec) || length(spec) == 0)
+  }
+  template_summary <- function(spec) {
+    out <- paste0(
+      names(spec$raw),
+      " = ",
+      cli::col_cyan(paste0("`", unname(spec$raw), "`")),
+      collapse = ", "
     )
+    if (nchar(out) > 90) {
+      out <- paste0(substr(out, 1, 87), "\u2026")
+    }
+    out
   }
-
-  # dir templates
-  if (length(dir_layers) == 0) {
-    lines <- c(lines, "  dir_templates: <none> (no dir layers)")
-  } else {
-    any_dir <- any(vapply(
-      dir_layers,
-      function(layer) {
-        spec <- x$dir_templates[[layer]]
-        !(is.null(spec) || length(spec) == 0)
-      },
-      logical(1)
-    ))
-
-    if (!any_dir) {
-      lines <- c(lines, "  dir_templates: <none>")
+  show_template_item <- function(label, spec) {
+    if (is.null(spec) || length(spec) == 0) {
+      cli::cli_li("{.field {label}}: <none>")
     } else {
-      lines <- c(lines, "  dir_templates:")
-      for (layer in dir_layers) {
-        spec <- x$dir_templates[[layer]]
-        if (is.null(spec) || length(spec) == 0) {
-          lines <- c(lines, sprintf("    - %s: <none>", layer))
-        } else {
-          kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
-          s <- paste(kv, collapse = ", ")
-          if (nchar(s) > 90) {
-            s <- paste0(substr(s, 1, 87), "\u2026")
-          }
-          lines <- c(lines, sprintf("    - %s: %s", layer, s))
-        }
-      }
+      summary <- template_summary(spec)
+      cli::cli_li("{.field {label}}: {summary}")
     }
   }
+  show_template_section <- function(
+    title,
+    templates,
+    layers,
+    keep_empty = FALSE
+  ) {
+    any_templates <- any(vapply(
+      layers,
+      has_templates,
+      logical(1),
+      templates = templates
+    ))
+    if (!any_templates) {
+      cli::cli_text("{title}: <none>")
+      return(invisible())
+    }
 
-  # file templates
-  any_file <- any(vapply(
-    names(x$file_templates),
-    function(layer) {
-      spec <- x$file_templates[[layer]]
-      !(is.null(spec) || length(spec) == 0)
-    },
-    logical(1)
-  ))
+    cli::cli_text("{title}:")
+    cli::cli_ul()
+    for (layer in layers) {
+      spec <- templates[[layer]]
+      if (!keep_empty && (is.null(spec) || length(spec) == 0)) {
+        next
+      }
+      show_template_item(layer, spec)
+    }
+    cli::cli_end()
+  }
+  show_file_template_section <- function(title, templates, layers) {
+    any_templates <- any(vapply(
+      layers,
+      has_templates,
+      logical(1),
+      templates = templates
+    ))
+    if (!any_templates) {
+      cli::cli_text("{title}: <none>")
+      return(invisible())
+    }
 
-  if (!any_file) {
-    lines <- c(lines, "  file_templates: <none>")
-  } else {
-    lines <- c(lines, "  file_templates:")
-    for (layer in names(x$file_templates)) {
-      spec <- x$file_templates[[layer]]
+    cli::cli_text("{title}:")
+    cli::cli_ul()
+    for (layer in layers) {
+      spec <- templates[[layer]]
       if (is.null(spec) || length(spec) == 0) {
         next
       }
-      kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
-      s <- paste(kv, collapse = ", ")
-      if (nchar(s) > 90) {
-        s <- paste0(substr(s, 1, 87), "\u2026")
-      }
-      lines <- c(lines, sprintf("    - at_layer=%s: %s", layer, s))
+      summary <- template_summary(spec)
+      cli::cli_li("{.field {layer}}: {summary}")
     }
+    cli::cli_end()
   }
 
-  # ignored dir templates
-  if (length(dir_layers) == 0) {
-    lines <- c(lines, "  ignore_dir_templates: <none> (no dir layers)")
-  } else {
-    any_ignore_dir <- any(vapply(
-      dir_layers,
-      function(layer) {
-        spec <- x$ignore_dir_templates[[layer]]
-        !(is.null(spec) || length(spec) == 0)
-      },
-      logical(1)
-    ))
+  cli::cli_format_method({
+    root <- as.character(x$root)
+    styled_layers <- paste(
+      vapply(
+        layers,
+        function(layer) cli::format_inline("{.field {layer}}"),
+        character(1)
+      ),
+      collapse = " / "
+    )
 
-    if (!any_ignore_dir) {
-      lines <- c(lines, "  ignore_dir_templates: <none>")
+    cli::cli_text("<{.cls filetree}> root: {root}")
+    cli::cli_text("layers: {styled_layers}")
+
+    pool_names <- names(x$regex_pool)
+    if (length(pool_names) == 0) {
+      cli::cli_text("regex_pool: <empty>")
     } else {
-      lines <- c(lines, "  ignore_dir_templates:")
-      for (layer in dir_layers) {
-        spec <- x$ignore_dir_templates[[layer]]
-        if (is.null(spec) || length(spec) == 0) {
-          next
-        }
-        kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
-        s <- paste(kv, collapse = ", ")
-        if (nchar(s) > 90) {
-          s <- paste0(substr(s, 1, 87), "\u2026")
-        }
-        lines <- c(lines, sprintf("    - %s: %s", layer, s))
-      }
+      cli::cli_text(
+        "regex_pool: {length(pool_names)} ({paste(pool_names, collapse = ', ')})"
+      )
     }
-  }
 
-  # ignored file templates
-  any_ignore_file <- any(vapply(
-    names(x$ignore_file_templates),
-    function(layer) {
-      spec <- x$ignore_file_templates[[layer]]
-      !(is.null(spec) || length(spec) == 0)
-    },
-    logical(1)
-  ))
-
-  if (!any_ignore_file) {
-    lines <- c(lines, "  ignore_file_templates: <none>")
-  } else {
-    lines <- c(lines, "  ignore_file_templates:")
-    for (layer in names(x$ignore_file_templates)) {
-      spec <- x$ignore_file_templates[[layer]]
-      if (is.null(spec) || length(spec) == 0) {
-        next
-      }
-      kv <- paste0(names(spec$raw), "=\"", unname(spec$raw), "\"")
-      s <- paste(kv, collapse = ", ")
-      if (nchar(s) > 90) {
-        s <- paste0(substr(s, 1, 87), "\u2026")
-      }
-      lines <- c(lines, sprintf("    - at_layer=%s: %s", layer, s))
+    if (length(dir_layers) == 0) {
+      cli::cli_text("dir_templates: <none> (no dir layers)")
+    } else {
+      show_template_section(
+        "dir_templates",
+        x$dir_templates,
+        dir_layers,
+        keep_empty = TRUE
+      )
     }
-  }
 
-  paste(lines, collapse = "\n")
+    show_file_template_section(
+      "file_templates",
+      x$file_templates,
+      names(x$file_templates)
+    )
+
+    if (length(dir_layers) == 0) {
+      cli::cli_text("ignore_dir_templates: <none> (no dir layers)")
+    } else {
+      show_template_section(
+        "ignore_dir_templates",
+        x$ignore_dir_templates,
+        dir_layers
+      )
+    }
+
+    show_file_template_section(
+      "ignore_file_templates",
+      x$ignore_file_templates,
+      names(x$ignore_file_templates)
+    )
+  })
 }
 
 #' Print a filetree summary
@@ -2512,6 +2505,6 @@ format.filetree <- function(x, ..., width = getOption("width")) {
 #' print(ft)
 #' @export
 print.filetree <- function(x, ..., width = getOption("width")) {
-  cat(format(x, ..., width = width), "\n")
+  cat(format(x, ..., width = width), sep = "\n")
   invisible(x)
 }

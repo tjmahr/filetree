@@ -65,14 +65,13 @@ ft <- ft_init(
   layers = c("subject", "time", "data")
 )
 ft
-#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
-#>   layers: subject / time / data
-#>   file_layer: data
-#>   regex_pool: <empty>
-#>   dir_templates: <none>
-#>   file_templates: <none>
-#>   ignore_dir_templates: <none>
-#>   ignore_file_templates: <none>
+#> <<filetree>> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
+#> layers: subject / time / data
+#> regex_pool: <empty>
+#> dir_templates: <none>
+#> file_templates: <none>
+#> ignore_dir_templates: <none>
+#> ignore_file_templates: <none>
 ```
 
 We define the schema with two related pieces. Field *regexes* define
@@ -106,17 +105,16 @@ ft <- ft |>
     template = "{subject}_{task}.txt"
   )
 ft
-#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
-#>   layers: subject / time / data
-#>   file_layer: data
-#>   regex_pool: 3 (subject, time, task)
-#>   dir_templates:
-#>     - subject: default="{subject}"
-#>     - time: default="{time}"
-#>   file_templates:
-#>     - at_layer=data: default="{subject}_{task}.txt"
-#>   ignore_dir_templates: <none>
-#>   ignore_file_templates: <none>
+#> <<filetree>> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
+#> layers: subject / time / data
+#> regex_pool: 3 (subject, time, task)
+#> dir_templates:
+#> • subject: default = `{subject}`
+#> • time: default = `{time}`
+#> file_templates:
+#> • data: default = `{subject}_{task}.txt`
+#> ignore_dir_templates: <none>
+#> ignore_file_templates: <none>
 ```
 
 Layer arguments also accept positive integer positions. Layer `1` is the
@@ -129,17 +127,16 @@ ft |>
 #> Warning: Template "default" is already registered at this layer.
 #> ℹ The existing template will be replaced. Use unique template names to keep
 #>   multiple templates.
-#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
-#>   layers: subject / time / data
-#>   file_layer: data
-#>   regex_pool: 3 (subject, time, task)
-#>   dir_templates:
-#>     - subject: default="{subject}"
-#>     - time: default="{time}"
-#>   file_templates:
-#>     - at_layer=data: default="{subject}_{task}.txt"
-#>   ignore_dir_templates: <none>
-#>   ignore_file_templates: <none>
+#> <<filetree>> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
+#> layers: subject / time / data
+#> regex_pool: 3 (subject, time, task)
+#> dir_templates:
+#> • subject: default = `{subject}`
+#> • time: default = `{time}`
+#> file_templates:
+#> • data: default = `{subject}_{task}.txt`
+#> ignore_dir_templates: <none>
+#> ignore_file_templates: <none>
 ```
 
 We can also view the filetree schema as a tree:
@@ -355,6 +352,19 @@ ft <- "./inst/demo-3" |>
     # temporarily override a field regex too
     with = c(task = "yellow")
   )
+ft
+#> <<filetree>> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-3
+#> layers: subject / time / data
+#> regex_pool: 3 (subject, time, task)
+#> dir_templates:
+#> • subject: default = `{subject}`
+#> • time: default = `day{time}`
+#> file_templates:
+#> • time: default = `{subject}-manifest.txt`
+#> • data: default = `{subject}_{time}_{task}.txt`, day03 =
+#> `{subject}_{time}_{task}.txt`
+#> ignore_dir_templates: <none>
+#> ignore_file_templates: <none>
 ```
 
 In the tree view, we can see multiple file templates in the `data`
