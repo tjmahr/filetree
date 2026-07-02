@@ -35,7 +35,7 @@ complete file names for files that belong to a specific layer. Fixed text in
 a template is matched literally and each template must match the full file
 name. For example, \verb{\{subject\}_\{task\}.txt} treats \code{.txt} as a literal
 extension, not a regular expression. File templates may be registered on any
-configured layer, including non-terminal directory layers, so sidecar files
+configured layer, including layers that also have child directories, so files
 such as subject-level manifests can live beside child directories.
 }
 \examples{

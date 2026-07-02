@@ -65,7 +65,7 @@ ft <- ft_init(
   layers = c("subject", "time", "data")
 )
 ft
-#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: <empty>
@@ -106,7 +106,7 @@ ft <- ft |>
     template = "{subject}_{task}.txt"
   )
 ft
-#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
+#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: 3 (subject, time, task)
@@ -126,7 +126,10 @@ be used for template registration.
 ``` r
 ft |>
   ft_add_dir_template(layer = 2, template = "{time}")
-#> <filetree> root: C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
+#> Warning: Template "default" is already registered at this layer.
+#> ℹ The existing template will be replaced. Use unique template names to keep
+#>   multiple templates.
+#> <filetree> root: C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
 #>   layers: subject / time / data
 #>   file_layer: data
 #>   regex_pool: 3 (subject, time, task)
@@ -143,7 +146,7 @@ We can also view the filetree schema as a tree:
 
 ``` r
 ft |> ft_schema_tree()
-#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-1
+#> C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-1
 #> └── subject: {subject}
 #>     └── time: {time}
 #>         └── `data` file: {subject}_{task}.txt
@@ -162,22 +165,22 @@ ft |> ft_list() |> fs::path_rel()
 #> inst/demo-1/ac-02/day03/ac-02_red.txt
 
 ft |> ft_index()
-#> # A tibble: 11 × 12
-#>    .path           .rel  at_layer layer__subject layer__time layer__data subject
-#>    <fs::path>      <chr> <chr>    <chr>          <chr>       <chr>       <chr>  
-#>  1 …b-01_green.txt ab-0… data     ab-01          day01       ab-01_gree… ab-01  
-#>  2 …/ab-01_red.txt ab-0… data     ab-01          day01       ab-01_red.… ab-01  
-#>  3 …b-01_green.txt ab-0… data     ab-01          day02       ab-01_gree… ab-01  
-#>  4 …/ab-01_red.txt ab-0… data     ab-01          day02       ab-01_red.… ab-01  
-#>  5 …b-01_green.txt ab-0… data     ab-01          day03       ab-01_gree… ab-01  
-#>  6 …c-02_green.txt ac-0… data     ac-02          day01       ac-02_gree… ac-02  
-#>  7 …/ac-02_red.txt ac-0… data     ac-02          day01       ac-02_red.… ac-02  
-#>  8 …c-02_green.txt ac-0… data     ac-02          day02       ac-02_gree… ac-02  
-#>  9 …/ac-02_red.txt ac-0… data     ac-02          day02       ac-02_red.… ac-02  
-#> 10 …c-02_green.txt ac-0… data     ac-02          day03       ac-02_gree… ac-02  
-#> 11 …/ac-02_red.txt ac-0… data     ac-02          day03       ac-02_red.… ac-02  
-#> # ℹ 5 more variables: time <chr>, task <chr>, template <chr>, .ok <lgl>,
-#> #   .problems <list>
+#> # A tibble: 11 × 13
+#>    .path         .rel  at_layer .filename layer__subject layer__time layer__data
+#>    <fs::path>    <chr> <chr>    <chr>     <chr>          <chr>       <chr>      
+#>  1 …01_green.txt ab-0… data     ab-01_gr… ab-01          day01       <NA>       
+#>  2 …b-01_red.txt ab-0… data     ab-01_re… ab-01          day01       <NA>       
+#>  3 …01_green.txt ab-0… data     ab-01_gr… ab-01          day02       <NA>       
+#>  4 …b-01_red.txt ab-0… data     ab-01_re… ab-01          day02       <NA>       
+#>  5 …01_green.txt ab-0… data     ab-01_gr… ab-01          day03       <NA>       
+#>  6 …02_green.txt ac-0… data     ac-02_gr… ac-02          day01       <NA>       
+#>  7 …c-02_red.txt ac-0… data     ac-02_re… ac-02          day01       <NA>       
+#>  8 …02_green.txt ac-0… data     ac-02_gr… ac-02          day02       <NA>       
+#>  9 …c-02_red.txt ac-0… data     ac-02_re… ac-02          day02       <NA>       
+#> 10 …02_green.txt ac-0… data     ac-02_gr… ac-02          day03       <NA>       
+#> 11 …c-02_red.txt ac-0… data     ac-02_re… ac-02          day03       <NA>       
+#> # ℹ 6 more variables: subject <chr>, time <chr>, task <chr>, template <chr>,
+#> #   .ok <lgl>, .problems <list>
 ```
 
 ### Ignoring files and directory subtrees
@@ -201,21 +204,23 @@ ft_ignored <- ft |>
   ft_ignore_dir_template("time", "tmp")
 
 ft_index(ft_ignored, files_to_check)
-#> # A tibble: 1 × 12
-#>   .path      .rel  at_layer layer__subject layer__time layer__data subject time 
-#>   <fs::path> <chr> <chr>    <chr>          <chr>       <chr>       <chr>   <chr>
-#> 1 …1_red.txt ab-0… data     ab-01          day01       ab-01_red.… ab-01   day01
-#> # ℹ 4 more variables: task <chr>, template <chr>, .ok <lgl>, .problems <list>
+#> # A tibble: 1 × 13
+#>   .path          .rel  at_layer .filename layer__subject layer__time layer__data
+#>   <fs::path>     <chr> <chr>    <chr>     <chr>          <chr>       <chr>      
+#> 1 …ab-01_red.txt ab-0… data     ab-01_re… ab-01          day01       <NA>       
+#> # ℹ 6 more variables: subject <chr>, time <chr>, task <chr>, template <chr>,
+#> #   .ok <lgl>, .problems <list>
 
 ft_index(ft_ignored, files_to_check, include_ignored = TRUE)
-#> # A tibble: 3 × 15
-#>   .path      .rel  at_layer layer__subject layer__time layer__data subject time 
-#>   <fs::path> <chr> <chr>    <chr>          <chr>       <chr>       <chr>   <chr>
-#> 1 …1_red.txt ab-0… data     ab-01          day01       ab-01_red.… ab-01   day01
-#> 2 …notes.txt ab-0… data     ab-01          day01       ab-01_note… <NA>    <NA> 
-#> 3 …-file.txt ab-0… data     ab-01          tmp         not-a-data… <NA>    <NA> 
-#> # ℹ 7 more variables: task <chr>, template <chr>, .ignored <lgl>,
-#> #   .ignore_template <chr>, .ignore_type <chr>, .ok <lgl>, .problems <list>
+#> # A tibble: 3 × 16
+#>   .path          .rel  at_layer .filename layer__subject layer__time layer__data
+#>   <fs::path>     <chr> <chr>    <chr>     <chr>          <chr>       <chr>      
+#> 1 …ab-01_red.txt ab-0… data     ab-01_re… ab-01          day01       <NA>       
+#> 2 …-01_notes.txt ab-0… data     ab-01_no… ab-01          day01       <NA>       
+#> 3 …data-file.txt ab-0… data     not-a-da… ab-01          tmp         <NA>       
+#> # ℹ 9 more variables: subject <chr>, time <chr>, task <chr>, template <chr>,
+#> #   .ignored <lgl>, .ignore_template <chr>, .ignore_type <chr>, .ok <lgl>,
+#> #   .problems <list>
 ```
 
 For comparison, here is a file tree with some problems.
@@ -357,7 +362,7 @@ layer:
 
 ``` r
 ft_schema_tree(ft)
-#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-3
+#> C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
 #>     ├── `time` file: {subject}-manifest.txt
 #>     └── time: day{time}
@@ -394,7 +399,7 @@ When the ft is complex, we can print out a tree-like version:
 
 ``` r
 ft_schema_tree(ft)
-#> C:/Users/mahr/Documents/GitRepos/filetree/inst/demo-3
+#> C:/Users/Tristan/Documents/GitRepos/filetree/inst/demo-3
 #> └── subject: {subject}
 #>     ├── `time` file: {subject}-manifest.txt
 #>     └── time: day{time}
@@ -410,19 +415,20 @@ ft |>
   ft_index() |> 
   dplyr::glimpse()
 #> Rows: 13
-#> Columns: 12
-#> $ .path          <fs::path> "C:/Users/mahr/Documents/GitRepos/filetree/inst/de…
+#> Columns: 13
+#> $ .path          <fs::path> "C:/Users/Tristan/Documents/GitRepos/filetree/inst…
 #> $ .rel           <chr> "ab-01/ab-01-manifest.txt", "ab-01/day01/ab-01_01_green…
 #> $ at_layer       <chr> "time", "data", "data", "data", "data", "data", "time",…
+#> $ .filename      <chr> "ab-01-manifest.txt", "ab-01_01_green.txt", "ab-01_01_r…
 #> $ layer__subject <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "…
 #> $ layer__time    <chr> NA, "day01", "day01", "day02", "day02", "day03", NA, "d…
-#> $ layer__data    <chr> "ab-01-manifest.txt", "ab-01_01_green.txt", "ab-01_01_r…
+#> $ layer__data    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
 #> $ subject        <chr> "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "ab-01", "…
 #> $ time           <chr> NA, "01", "01", "02", "02", "03", NA, "01", "01", "02",…
 #> $ task           <chr> NA, "green", "red", "green", "red", "yellow", NA, "gree…
 #> $ template       <chr> "default", "default", "default", "default", "default", …
 #> $ .ok            <lgl> TRUE, TRUE, TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, TRUE…
-#> $ .problems      <list> <NULL>, <NULL>, <NULL>, "filename has {.var time} {.va…
+#> $ .problems      <list> <NULL>, <NULL>, <NULL>, "filename has {.var time} {.val…
 ```
 
 ## Current impressions

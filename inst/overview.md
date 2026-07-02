@@ -79,7 +79,7 @@ main S3 class, `filetree`, represented as a list with these slots:
 | Slot | Purpose |
 | --- | --- |
 | `root` | Absolute root path used as the base for indexing. |
-| `layers` | Ordered layer names, including the terminal file-name layer. |
+| `layers` | Ordered layer names that can own directory and file templates. |
 | `regex_pool` | Named reusable field regexes. |
 | `dir_templates` | Directory template specs for non-terminal layers. |
 | `file_templates` | File-name template specs for any configured layer. |
@@ -179,22 +179,24 @@ sequenceDiagram
 ```
 
 `ft_index()` first converts files to paths relative to `ft$root`, splits each
-relative path into components, and fills raw `layer__<name>` columns. It assigns
-an initial `at_layer` from path depth with `.ft_at_layer_from_parts()`.
+relative path into directory components plus a basename, fills raw
+`layer__<name>` columns from directory components, and stores the basename in
+`.filename`. It assigns an initial `at_layer` from path depth with
+`.ft_at_layer_from_parts()`.
 
 Before validation, ignore templates classify paths. By default, ignored files
 are dropped. With `include_ignored = TRUE`, ignored files remain in the index as
 inert audit rows with `.ignored = TRUE`, `.ignore_template`, `.ignore_type`,
 `.ok = TRUE`, and empty `.problems`. Ignored rows keep path-derived columns
-such as `.path`, `.rel`, `at_layer`, and `layer__<name>`, but they do not
-participate in directory validation, file validation, capture extraction,
+such as `.path`, `.rel`, `at_layer`, `.filename`, and `layer__<name>`, but they
+do not participate in directory validation, file validation, capture extraction,
 conflict checks, or strict-mode diagnostics.
 
 For performance, `ft_index()` uses a fast relative-path path when supplied files
 are already under `ft$root`, and falls back to `fs::path_rel()` only for paths
 outside that direct prefix. File-layer resolution is skipped unless an
 immediate parent layer has registered file templates, which avoids row-wise
-sidecar checks for ordinary data-file trees.
+alternate-owner checks for ordinary data-file trees.
 
 `ft_list()` also applies ignore templates by default so callers can prune files
 before building an index. Use `include_ignored = TRUE` to list every file under
@@ -208,14 +210,16 @@ templates may depend on parent metadata through `when`, and because file capture
 are checked against values already extracted from parent directories.
 
 After directory extraction, `.ft_resolve_file_layers()` refines `at_layer` for
-files that may belong to an earlier layer. This is what allows subject-level
-sidecar files such as manifests to be validated by a `subject` file template even
-when the file sits beside child directories.
+files whose basename may be owned by a nearby layer other than the depth-based
+default. This is what allows subject-level manifests and terminal data files to
+share the same model: `.filename` stores the basename, and `at_layer` identifies
+which layer's file templates validate it.
 
 The returned tibble contains:
 
 - `.path`, `.rel`, and `at_layer` for path identity and classification.
-- `layer__<name>` columns for raw path components.
+- `.filename`, the raw basename matched by file templates.
+- `layer__<name>` columns for raw directory path components.
 - one column for every placeholder used by registered templates.
 - `template`, the matched file template name when one matched.
 - `.ignored`, `.ignore_template`, and `.ignore_type` when
@@ -306,7 +310,7 @@ Current local test guidance from project notes: `devtools::document()`,
 | --- | --- |
 | layer | A named level of the expected path hierarchy. The final layer represents file names. |
 | integer layer reference | A positive integer position into `ft$layers`; `1` is the first configured layer, while `0` is the implicit inaccessible root. |
-| directory layer | Any layer before the final file-name layer. |
+| directory layer | Any layer before the final layer; these layers can have directory templates for child paths and file templates for files they own. |
 | file template | A full-string component template that validates and extracts metadata from a file name at a specific layer. |
 | directory template | A full-string component template that validates and extracts metadata from a directory name at a specific layer. |
 | ignored directory template | A full-string component template that excludes every file below a matching directory component. |
@@ -314,6 +318,7 @@ Current local test guidance from project notes: `devtools::document()`,
 | regex pool | Named field regexes reusable from `{placeholder}` syntax. |
 | placeholder | A `{name}` token in a component template that compiles to a capture using a regex pool entry. |
 | extracted field | A tibble column produced by captures from directory or file templates. |
-| `layer__<name>` | A raw path-component column in the index tibble. |
-| `at_layer` | The layer where a file is classified for file-template validation. |
+| `layer__<name>` | A raw directory path-component column in the index tibble. |
+| `.filename` | The raw basename matched by file and ignored-file templates. |
+| `at_layer` | The layer whose file templates own `.filename`. |
 | sidecar file | A file that belongs to a non-terminal layer, such as a subject manifest beside time directories. |

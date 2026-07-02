@@ -406,7 +406,10 @@ test_that("Template APIs accept integer layer references", {
   expect_true(all(index$.ok))
   expect_equal(ft_integer$dir_templates$subject$raw[["default"]], "{subject}")
   expect_equal(ft_integer$dir_templates$time$raw[["default"]], "{time}")
-  expect_equal(ft_integer$file_templates$data$raw[["default"]], "{subject}_{task}.txt")
+  expect_equal(
+    ft_integer$file_templates$data$raw[["default"]],
+    "{subject}_{task}.txt"
+  )
 
   ft_ignored <- ft_integer |>
     ft_ignore_dir_template(2, c(scratch = "tmp")) |>
@@ -1027,6 +1030,38 @@ test_that("File templates at parent layers validate sidecar files", {
   )
 })
 
+test_that("Filenames are stored separately from raw directory layer columns", {
+  ft_extra_layer <- ft_init(root3, c("subject", "time", "data", "extra")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_dir_template("time", "day{time}") |>
+    ft_add_file_template(
+      "data",
+      "{subject}_{time}_{task}.txt",
+      when = list(time = c("01", "02"))
+    )
+
+  index <- ft_index(
+    ft_extra_layer,
+    fs::path(root3, "ab-02/day01/ab-02_01_green.txt")
+  )
+
+  expect_equal(index$at_layer, "data")
+  expect_equal(index$layer__subject, "ab-02")
+  expect_equal(index$layer__time, "day01")
+  expect_true(is.na(index$layer__data))
+  expect_true(is.na(index$layer__extra))
+  expect_equal(index$.filename, "ab-02_01_green.txt")
+  expect_equal(index$subject, "ab-02")
+  expect_equal(index$time, "01")
+  expect_equal(index$task, "green")
+  expect_true(index$.ok)
+})
+
 test_that("ft_set_root updates the root path", {
   ft_root <- ft_init(root1, c("subject", "time", "data"))
 
@@ -1193,7 +1228,11 @@ test_that("Ignore templates support when and with arguments", {
     ft_add_dir_template("site", "{site}") |>
     ft_add_dir_template("bucket", "{bucket}") |>
     ft_add_file_template("data", "{task}.txt") |>
-    ft_ignore_dir_template("bucket", c(lab_a = "{bucket}"), when = c(site = "lab-a")) |>
+    ft_ignore_dir_template(
+      "bucket",
+      c(lab_a = "{bucket}"),
+      when = c(site = "lab-a")
+    ) |>
     ft_ignore_dir_template(
       "bucket",
       c(lab_b = "{bucket}"),
@@ -1454,7 +1493,11 @@ test_that("Schema trees show ignored directory and file templates", {
 
   lines <- ft_format_schema_tree(ft_schema)
 
-  expect_true(any(grepl("ignored `time` dir: scratch = tmp", lines, fixed = TRUE)))
+  expect_true(any(grepl(
+    "ignored `time` dir: scratch = tmp",
+    lines,
+    fixed = TRUE
+  )))
   expect_true(any(grepl(
     "ignored `data` file: notes = {subject}_notes.txt",
     lines,
@@ -1473,7 +1516,11 @@ test_that("Formatted filetrees summarize ignored templates", {
   expect_true(grepl("ignore_dir_templates:", lines, fixed = TRUE))
   expect_true(grepl("ignore_file_templates:", lines, fixed = TRUE))
   expect_true(grepl("subject: scratch=\"tmp\"", lines, fixed = TRUE))
-  expect_true(grepl("at_layer=data: notes=\"{subject}_notes.txt\"", lines, fixed = TRUE))
+  expect_true(grepl(
+    "at_layer=data: notes=\"{subject}_notes.txt\"",
+    lines,
+    fixed = TRUE
+  ))
 })
 
 test_that("Schema trees hide default template names only for singleton layers", {

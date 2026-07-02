@@ -25,15 +25,17 @@ accepted so partial schemas can be used for exploratory indexing.}
 audit rows. If \code{FALSE}, ignored files are pruned before validation.}
 }
 \value{
-A tibble with \code{.path}, \code{.rel}, \code{at_layer}, layer columns
-(\verb{layer__<name>}), captured placeholders, the matched template name, \code{.ok}
-flag, and \code{.problems} list-column.
+A tibble with \code{.path}, \code{.rel}, \code{at_layer}, \code{.filename}, layer
+columns (\verb{layer__<name>}), captured placeholders, the matched template
+name, \code{.ok} flag, and \code{.problems} list-column. The \code{.filename} column
+stores the basename matched by file templates; \code{at_layer} identifies the
+layer whose file templates own that basename.
 }
 \description{
 Validate file paths against the configured directory and file-name templates,
 extract placeholder captures, and report any problems. File templates
-registered on parent layers are considered for sidecar files before
-unmatched files are reported.
+registered on nearby layers are considered before unmatched files are
+reported.
 }
 \examples{
 root <- system.file("demo-1", package = "filetree")
