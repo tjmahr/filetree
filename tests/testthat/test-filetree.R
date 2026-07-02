@@ -1505,6 +1505,91 @@ test_that("Schema trees show ignored directory and file templates", {
   )))
 })
 
+test_that("Flat schema display groups templates by layer path", {
+  ft_schema <- ft_init("demo-root", c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_dir_template("time", "day{time}") |>
+    ft_add_file_template("subject", "{subject}-manifest.txt") |>
+    ft_add_file_template("data", "{subject}_{time}_{task}.txt")
+
+  plain <- cli::ansi_strip(ft_format_schema_flat(ft_schema))
+
+  expect_true(any(grepl(". / subject", plain, fixed = TRUE)))
+  expect_true(any(grepl("dirs: default = `{subject}`", plain, fixed = TRUE)))
+  expect_true(any(grepl(
+    "files: default = `{subject}-manifest.txt`",
+    plain,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(". / subject / time", plain, fixed = TRUE)))
+  expect_true(any(grepl("dirs: default = `day{time}`", plain, fixed = TRUE)))
+  expect_true(any(grepl(". / subject / time / data", plain, fixed = TRUE)))
+  expect_true(any(grepl(
+    "files: default = `{subject}_{time}_{task}.txt`",
+    plain,
+    fixed = TRUE
+  )))
+})
+
+test_that("Flat schema display shows conditional and ignored templates", {
+  ft_schema <- ft_init("demo-root", c("sample", "visit", "data")) |>
+    ft_add_regex(c(
+      sample = "CP1|CP2|TD",
+      visit = "\\d{2}",
+      xxv00 = "xxv00",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("sample", c(CP1 = "CP1", CP2 = "CP2", TD = "TD")) |>
+    ft_add_dir_template(
+      "visit",
+      c(cp = "{visit}"),
+      when = list(sample = c("CP1", "CP2")),
+      with = c(visit = "{xxv00}")
+    ) |>
+    ft_add_file_template(
+      "data",
+      c(red = "{visit}_{task}.txt"),
+      when = c(task = "red")
+    ) |>
+    ft_ignore_dir_template("visit", c(scratch = "tmp")) |>
+    ft_ignore_file_template("data", c(notes = "{visit}_notes.txt"))
+
+  plain <- cli::ansi_strip(ft_format_schema_flat(ft_schema))
+
+  expect_true(any(grepl("dirs: CP1 = `CP1`", plain, fixed = TRUE)))
+  expect_true(any(grepl("      CP2 = `CP2`", plain, fixed = TRUE)))
+  expect_true(any(grepl(
+    "dirs: cp = `{visit}` [when sample in CP1, CP2; with visit = {xxv00}]",
+    plain,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "files: red = `{visit}_{task}.txt` [when task == red]",
+    plain,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl("ignored dirs: scratch = `tmp`", plain, fixed = TRUE)))
+  expect_true(any(grepl(
+    "ignored files: notes = `{visit}_notes.txt`",
+    plain,
+    fixed = TRUE
+  )))
+})
+
+test_that("Flat schema printer returns the filetree invisibly", {
+  ft_schema <- ft_init("demo-root", c("subject", "data"))
+
+  out <- utils::capture.output(result <- ft_schema_flat(ft_schema))
+
+  expect_identical(result, ft_schema)
+  expect_true(any(grepl(". / subject", out, fixed = TRUE)))
+})
+
 test_that("Formatted filetrees summarize ignored templates", {
   ft_schema <- ft_init("demo-root", c("subject", "data")) |>
     ft_add_regex(c(subject = "\\w{2}-\\d{2}", task = "red|green")) |>

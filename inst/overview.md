@@ -71,6 +71,7 @@ flowchart TD
     Index --> Result["index tibble"]
     Result --> Problems["ft_glimpse_problems()"]
     Object --> Schema["ft_schema_tree() / ft_format_schema_tree()"]
+    Object --> FlatSchema["ft_schema_flat() / ft_format_schema_flat()"]
 ```
 
 Most package behavior lives in `R/filetree.R`. The package currently has one
@@ -102,6 +103,8 @@ main S3 class, `filetree`, represented as a list with these slots:
 | `ft_glimpse_problems()` | Print a compact summary of problem files. |
 | `ft_format_schema_tree()` | Return tree-shaped schema summary lines. |
 | `ft_schema_tree()` | Print the schema tree and invisibly return the `filetree`. |
+| `ft_format_schema_flat()` | Return experimental flat schema summary lines. |
+| `ft_schema_flat()` | Print the experimental flat schema summary and invisibly return the `filetree`. |
 | `format.filetree()` / `print.filetree()` | Summarize configured roots, layers, regexes, and templates. |
 
 ## Field Regexes and Component Templates
@@ -262,6 +265,15 @@ templates are shown as ignored directory or file entries.
 The R source uses Unicode escape sequences for tree branches rather than literal
 box-drawing characters so the package source remains ASCII-only.
 
+`ft_format_schema_flat()` and `ft_schema_flat()` are experimental alternatives
+for schemas that become too wide or deeply indented in the tree display. They
+print one section per layer path, such as `. / sample / speaker / visit`, and
+group templates under `dirs:`, `files:`, `ignored dirs:`, and `ignored files:`
+labels. Template names remain plain text, template strings are shown in
+backticks, and `when`/`with` annotations use the same wording as the tree
+display. Layers use CLI styling consistent with `format.filetree()`, with the
+last layer in each path emphasized.
+
 `format.filetree()` uses `cli::cli_format_method()` and returns one character
 element per printed line. `print.filetree()` prints those lines with newline
 separators and invisibly returns the input object. The summary shows the root,
@@ -287,6 +299,7 @@ exercise:
 - user-facing problem messages;
 - sidecar files registered on parent layers;
 - schema tree formatting;
+- experimental flat schema formatting;
 - S3 `format()` and `print()` output.
 
 Demo file trees live in `inst/demo-1`, `inst/demo-2`, and `inst/demo-3`.
@@ -310,7 +323,7 @@ Current local test guidance from project notes: `devtools::document()`,
 | Layer resolution | `R/filetree.R` | `.ft_resolve_layer()`, `.ft_is_integerish()` |
 | Ignore classification | `R/filetree.R` | `.ft_classify_ignored()`, `.ft_has_ignore_templates()` |
 | Diagnostics | `R/filetree.R` | `ft_glimpse_problems()`, `.ft_validate_index()` |
-| Schema display | `R/filetree.R` | `ft_format_schema_tree()`, `ft_schema_tree()`, `.ft_format_schema_dir()` |
+| Schema display | `R/filetree.R` | `ft_format_schema_tree()`, `ft_schema_tree()`, `ft_format_schema_flat()`, `ft_schema_flat()`, `.ft_format_schema_dir()` |
 | S3 display | `R/filetree.R` | `format.filetree()`, `print.filetree()` |
 | Tests | `tests/testthat/test-filetree.R` | package behavior and regression coverage |
 | User examples | `README.Rmd` | current public examples and development notes |

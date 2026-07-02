@@ -380,6 +380,22 @@ ft_schema_tree(ft)
 #>         └── `data` file: day03 = {subject}_{time}_{task}.txt [when time == 03; with task = yellow]
 ```
 
+When tree view gets too wide, a flat view is available :
+
+``` r
+ft_schema_flat(ft)
+#> . / subject
+#>   dirs: default = `{subject}`
+#> 
+#> . / subject / time
+#>   dirs: default = `day{time}`
+#>   files: default = `{subject}-manifest.txt`
+#> 
+#> . / subject / time / data
+#>   files: default = `{subject}_{time}_{task}.txt` [when time in 01, 02]
+#>          day03 = `{subject}_{time}_{task}.txt` [when time == 03; with task = yellow]
+```
+
 We should find our five problems:
 
 ``` r

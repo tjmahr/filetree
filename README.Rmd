@@ -273,6 +273,12 @@ In the tree view, we can see multiple file templates in the `data` layer:
 ft_schema_tree(ft)
 ```
 
+When tree view gets too wide, a flat view is available :
+
+```{r}
+ft_schema_flat(ft)
+```
+
 We should find our five problems:
 
 ```{r}

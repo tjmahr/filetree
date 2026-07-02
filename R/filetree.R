@@ -2141,6 +2141,155 @@ ft_schema_tree <- function(ft) {
   invisible(ft)
 }
 
+#' Format a filetree schema as flat path sections
+#'
+#' \ifelse{html}{\out{<span class="badge badge-warning">Experimental</span>}}{\strong{Experimental}}
+#'
+#' Create a path-oriented summary of the declared directory and file templates.
+#' Unlike [ft_format_schema_tree()], this display avoids deep tree indentation
+#' so schemas with many long conditional templates remain easier to scan.
+#'
+#' @param ft A `filetree` object.
+#' @return Character vector containing the formatted schema lines.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#'
+#' ft <- ft_init(root, c("subject", "time", "data")) |>
+#'   ft_add_regex(c(
+#'     subject = "\\w{2}-\\d{2}",
+#'     time = "day\\d{2}",
+#'     task = "red|green"
+#'   )) |>
+#'   ft_add_dir_template("subject", "{subject}") |>
+#'   ft_add_dir_template("time", "{time}") |>
+#'   ft_add_file_template("data", "{subject}_{task}.txt")
+#'
+#' ft_format_schema_flat(ft)
+#' @export
+ft_format_schema_flat <- function(ft) {
+  .ft_check_filetree(ft)
+
+  layers <- ft$layers
+  cli::cli_format_method({
+    for (i in seq_along(layers)) {
+      if (i > 1L) {
+        cli::cli_text("")
+      }
+
+      cli::cli_text(.ft_format_flat_schema_path(layers[seq_len(i)]))
+
+      layer <- layers[[i]]
+      dir_lines <- if (layer %in% names(ft$dir_templates)) {
+        .ft_format_flat_template_lines("dirs", ft$dir_templates[[layer]])
+      } else {
+        character()
+      }
+      file_lines <- .ft_format_flat_template_lines(
+        "files",
+        ft$file_templates[[layer]]
+      )
+      ignore_dir_lines <- if (layer %in% names(ft$ignore_dir_templates)) {
+        .ft_format_flat_template_lines(
+          "ignored dirs",
+          ft$ignore_dir_templates[[layer]]
+        )
+      } else {
+        character()
+      }
+      ignore_file_lines <- .ft_format_flat_template_lines(
+        "ignored files",
+        ft$ignore_file_templates[[layer]]
+      )
+
+      section_lines <- c(
+        dir_lines,
+        file_lines,
+        ignore_dir_lines,
+        ignore_file_lines
+      )
+      if (!length(section_lines)) {
+        cli::cli_text("  <no templates>")
+      } else {
+        cli::cli_verbatim(section_lines)
+      }
+    }
+  })
+}
+
+#' Print a flat filetree schema summary
+#'
+#' \ifelse{html}{\out{<span class="badge badge-warning">Experimental</span>}}{\strong{Experimental}}
+#'
+#' Print the result of [ft_format_schema_flat()] and invisibly return the input
+#' `filetree`.
+#'
+#' @param ft A `filetree` object.
+#' @return The input `filetree`, invisibly.
+#' @examples
+#' root <- system.file("demo-1", package = "filetree")
+#' ft <- ft_init(root, c("subject", "time", "data"))
+#'
+#' ft_schema_flat(ft)
+#' @export
+ft_schema_flat <- function(ft) {
+  cat(ft_format_schema_flat(ft), sep = "\n")
+  cat("\n")
+  invisible(ft)
+}
+
+.ft_format_flat_schema_path <- function(layers) {
+  styled_layers <- vapply(
+    seq_along(layers),
+    function(i) {
+      layer <- layers[[i]]
+      if (i == length(layers)) {
+        return(cli::format_inline("{.strong {.field {layer}}}"))
+      }
+      cli::format_inline("{.field {layer}}")
+    },
+    character(1)
+  )
+  paste(c(".", styled_layers), collapse = " / ")
+}
+
+.ft_format_flat_template_lines <- function(label, spec) {
+  if (is.null(spec) || length(spec) == 0) {
+    return(character())
+  }
+
+  template_lines <- .ft_format_flat_template_entries(spec)
+  prefix <- paste0("  ", label, ": ")
+  continuation <- strrep(" ", nchar(prefix))
+  paste0(
+    ifelse(seq_along(template_lines) == 1L, prefix, continuation),
+    template_lines
+  )
+}
+
+.ft_format_flat_template_entries <- function(spec) {
+  out <- character(length(spec$raw))
+  for (i in seq_along(spec$raw)) {
+    nm <- names(spec$raw)[[i]]
+    template <- cli::col_cyan(paste0("`", unname(spec$raw[[i]]), "`"))
+    out[[i]] <- paste0(nm, " = ", template)
+
+    annotations <- c(
+      .ft_format_when_annotation(spec$when[[i]]),
+      .ft_format_with_annotation(spec$with[[i]])
+    )
+    annotations <- annotations[nzchar(annotations)]
+    if (length(annotations)) {
+      out[[i]] <- paste0(
+        out[[i]],
+        " [",
+        paste(annotations, collapse = "; "),
+        "]"
+      )
+    }
+  }
+  out
+}
+
 .ft_has_file_templates <- function(ft, layer) {
   spec <- ft$file_templates[[layer]]
   !(is.null(spec) || length(spec) == 0)
