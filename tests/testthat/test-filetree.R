@@ -54,7 +54,14 @@ test_that("There are no problems in a well-formed tree", {
 
   # subject to change
   index |>
-    hasName(c("subject", "time", "task", "template", ".ok", ".problems")) |>
+    hasName(c(
+      "subject",
+      "time",
+      "task",
+      ".file_template",
+      ".ok",
+      ".problems"
+    )) |>
     all() |>
     expect_true()
 
@@ -319,6 +326,7 @@ test_that("Files outside or at the root are structural problems", {
     index$.problems[[3]],
     "file is at or above root; no matching layer"
   )
+  expect_equal(index$.file_template, c("default", NA, NA))
   expect_false(any(grepl(
     "path deeper than layers",
     index$.problems[[2]],
@@ -387,6 +395,13 @@ test_that("Public validators report argument-specific errors", {
     ft_glimpse_problems(ft_index(ft), n = NA),
     "`n` must be a non-negative number.",
     fixed = TRUE
+  )
+})
+
+test_that("ft_index validates include_templates", {
+  expect_snapshot(
+    error = TRUE,
+    ft_index(ft, include_templates = NA)
   )
 })
 
@@ -590,7 +605,7 @@ test_that("File templates can be conditional on parent layer values", {
   index <- ft_index(ft_conditional, files)
 
   expect_true(all(index$.ok))
-  expect_equal(index$template, c("txt", "wav"))
+  expect_equal(index$.file_template, c("txt", "wav"))
 })
 
 test_that("Conditional file templates do not apply outside their conditions", {
@@ -705,7 +720,7 @@ test_that("Conditional file templates can match any of several parent values", {
   index <- ft_index(ft_conditional, files, strict = TRUE)
 
   expect_equal(index$.ok, c(TRUE, TRUE, TRUE, FALSE))
-  expect_equal(index$template, c("main", "main", "day03", NA))
+  expect_equal(index$.file_template, c("main", "main", "day03", NA))
   expect_true(any(grepl(
     "does not match a file template at layer `data`",
     index$.problems[[4]],
@@ -989,9 +1004,10 @@ test_that("Directory template problems use cli formatting and layer context", {
     index$.problems[[1]][[1]],
     "directory name 'day3' does not match a dir template at layer `time`"
   )
+  expect_equal(index$.file_template, NA_character_)
 })
 
-test_that("File templates at parent layers validate sidecar files", {
+test_that("File templates validate sidecar files at their path-depth layer", {
   root <- fs::path_temp("filetree-sidecar-files")
   ft_messages <- ft_init(root, c("subject", "time", "data")) |>
     ft_add_regex(c(
@@ -1001,7 +1017,7 @@ test_that("File templates at parent layers validate sidecar files", {
     )) |>
     ft_add_dir_template("subject", "{subject}") |>
     ft_add_dir_template("time", "day{time}") |>
-    ft_add_file_template("subject", "{subject}-manifest.txt") |>
+    ft_add_file_template("time", "{subject}-manifest.txt") |>
     ft_add_file_template("data", "{subject}_{time}_{task}.txt")
 
   index <- ft_index(
@@ -1013,10 +1029,11 @@ test_that("File templates at parent layers validate sidecar files", {
         "ab-02/aa-02-manifest.txt",
         "ab-03/not-a-manifest.csv"
       )
-    )
+    ),
+    strict = TRUE
   )
 
-  expect_equal(index$at_layer, c("subject", "subject", "subject"))
+  expect_equal(index$.at_layer, c("time", "time", "time"))
   expect_true(index$.ok[[1]])
   expect_false(index$.ok[[2]])
   expect_false(index$.ok[[3]])
@@ -1026,7 +1043,198 @@ test_that("File templates at parent layers validate sidecar files", {
   )
   expect_equal(
     index$.problems[[3]],
-    "filename 'not-a-manifest.csv' does not match a file template at layer `subject`"
+    "filename 'not-a-manifest.csv' does not match a file template at layer `time`"
+  )
+})
+
+test_that("File templates cannot reclassify files into occupied layers", {
+  root <- fs::path_temp("filetree-wrong-sidecar-layer")
+  ft_wrong <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}")) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_file_template("subject", "{subject}-manifest.txt")
+
+  index <- ft_index(
+    ft_wrong,
+    fs::path(
+      root,
+      c(
+        "ab-01/ab-01-manifest.txt",
+        "ab-02/aa-02-manifest.txt",
+        "ab-03/not-a-manifest.csv"
+      )
+    ),
+    strict = TRUE
+  )
+
+  expect_equal(index$.at_layer, rep("time", 3))
+  expect_equal(
+    index$.problems,
+    rep(list("no file templates registered for `time` files"), 3)
+  )
+  expect_equal(index$.file_template, rep(NA_character_, 3))
+})
+
+test_that("Index metadata is dotted and template matches are long-form", {
+  root <- fs::path_temp("filetree-index-metadata")
+  fs::dir_create(root)
+  ft_named <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      time = "\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", c(subject_dir = "{subject}")) |>
+    ft_add_dir_template("time", c(time_dir = "day{time}")) |>
+    ft_add_file_template(
+      "data",
+      c(data_file = "{subject}_{task}.txt")
+    )
+
+  index <- ft_index(
+    ft_named,
+    fs::path(root, "ab-01/day01/ab-01_red.txt"),
+    include_templates = TRUE
+  )
+
+  expect_named(
+    index,
+    c(
+      ".path",
+      ".rel",
+      ".at_layer",
+      ".filename",
+      ".layer__subject",
+      ".layer__time",
+      ".layer__data",
+      "subject",
+      "time",
+      "task",
+      ".file_template",
+      ".templates",
+      ".ok",
+      ".problems"
+    )
+  )
+  expect_equal(index$.file_template, "data_file")
+  expect_equal(
+    index$.templates[[1]],
+    tibble::tibble(
+      layer = c("subject", "time", "data"),
+      type = c("dir", "dir", "file"),
+      name = c("subject_dir", "time_dir", "data_file"),
+      value = c("ab-01", "day01", "ab-01_red.txt")
+    )
+  )
+})
+
+test_that("Indexes report file templates without template audit details", {
+  root <- fs::path_temp("filetree-compact-template-metadata")
+  ft_named <- ft_init(root, c("subject", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_file_template(
+      "data",
+      c(
+        txt = "{subject}_{task}.txt",
+        wav = "{subject}_{task}.wav"
+      )
+    ) |>
+    ft_ignore_file_template("data", c(notes = "{subject}_notes.txt"))
+
+  index <- ft_index(
+    ft_named,
+    fs::path(
+      root,
+      c(
+        "ab-01/ab-01_red.txt",
+        "ab-02/not-a-match.csv",
+        "ab-03/ab-03_notes.txt"
+      )
+    ),
+    include_ignored = TRUE
+  )
+
+  expect_equal(index$.file_template, c("txt", NA, NA))
+  expect_equal(index$.ignored, c(FALSE, FALSE, TRUE))
+  expect_equal(intersect(".templates", names(index)), character())
+})
+
+test_that("Template conditions can use dotted raw layer columns", {
+  root <- fs::path_temp("filetree-raw-layer-condition")
+  fs::dir_create(root)
+  ft_raw <- ft_init(root, c("site", "subject", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("site", c(lab_a = "lab-a")) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_file_template(
+      "data",
+      c(raw_site = "{subject}_{task}.txt"),
+      when = c(.layer__site = "lab-a")
+    )
+
+  index <- ft_index(
+    ft_raw,
+    fs::path(root, "lab-a/ab-01/ab-01_red.txt"),
+    strict = TRUE
+  )
+
+  expect_equal(index$.ok, TRUE)
+  expect_equal(index$.file_template, "raw_site")
+})
+
+test_that("Template matches include conflicts and exclude ignored audit rows", {
+  root <- fs::path_temp("filetree-template-match-audit")
+  fs::dir_create(root)
+  ft_audit <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(
+      subject = "\\w{2}-\\d{2}",
+      task = "red|green"
+    )) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_add_file_template(
+      "time",
+      c(manifest = "{subject}-manifest.txt")
+    ) |>
+    ft_ignore_file_template(
+      "time",
+      c(notes = "{subject}-notes.txt")
+    )
+
+  index <- ft_index(
+    ft_audit,
+    fs::path(
+      root,
+      c("ab-01/aa-01-manifest.txt", "ab-02/ab-02-notes.txt")
+    ),
+    include_ignored = TRUE,
+    include_templates = TRUE
+  )
+
+  expect_equal(
+    index$.templates[[1]],
+    tibble::tibble(
+      layer = c("subject", "time"),
+      type = c("dir", "file"),
+      name = c("default", "manifest"),
+      value = c("ab-01", "aa-01-manifest.txt")
+    )
+  )
+  expect_equal(index$.file_template, rep(NA_character_, 2))
+  expect_equal(
+    index$.templates[[2]],
+    tibble::tibble(
+      layer = character(),
+      type = character(),
+      name = character(),
+      value = character()
+    )
   )
 })
 
@@ -1050,11 +1258,11 @@ test_that("Filenames are stored separately from raw directory layer columns", {
     fs::path(root3, "ab-02/day01/ab-02_01_green.txt")
   )
 
-  expect_equal(index$at_layer, "data")
-  expect_equal(index$layer__subject, "ab-02")
-  expect_equal(index$layer__time, "day01")
-  expect_true(is.na(index$layer__data))
-  expect_true(is.na(index$layer__extra))
+  expect_equal(index$.at_layer, "data")
+  expect_equal(index$.layer__subject, "ab-02")
+  expect_equal(index$.layer__time, "day01")
+  expect_true(is.na(index$.layer__data))
+  expect_true(is.na(index$.layer__extra))
   expect_equal(index$.filename, "ab-02_01_green.txt")
   expect_equal(index$subject, "ab-02")
   expect_equal(index$time, "01")
@@ -1105,6 +1313,29 @@ test_that("Ignore file templates drop matching files from indexes", {
   expect_equal(index$.rel, "ab-01/day01/ab-01_red.txt")
   expect_true(index$.ok[[1]])
   expect_false(".ignored" %in% names(index))
+})
+
+test_that("Ignore file templates cannot match files at another depth", {
+  root <- fs::path_temp("filetree-wrong-ignore-layer")
+  fs::dir_create(root)
+  ft_wrong_ignore <- ft_init(root, c("subject", "time", "data")) |>
+    ft_add_regex(c(subject = "\\w{2}-\\d{2}")) |>
+    ft_add_dir_template("subject", "{subject}") |>
+    ft_ignore_file_template("subject", "{subject}-notes.txt")
+
+  index <- ft_index(
+    ft_wrong_ignore,
+    fs::path(root, "ab-01/ab-01-notes.txt"),
+    strict = TRUE,
+    include_ignored = TRUE
+  )
+
+  expect_equal(index$.at_layer, "time")
+  expect_false(index$.ignored)
+  expect_equal(
+    index$.problems[[1]],
+    "no file templates registered for `time` files"
+  )
 })
 
 test_that("Ignore directory templates prune matching subtrees", {
@@ -1193,9 +1424,9 @@ test_that("Ignored files can be included as inert audit rows", {
   expect_equal(nrow(index), 2)
   expect_equal(nrow(ignored), 1)
   expect_equal(ignored$.rel, "ab-01/tmp/not-a-valid-file-name.txt")
-  expect_equal(ignored$at_layer, "data")
-  expect_equal(ignored$layer__subject, "ab-01")
-  expect_equal(ignored$layer__time, "tmp")
+  expect_equal(ignored$.at_layer, "data")
+  expect_equal(ignored$.layer__subject, "ab-01")
+  expect_equal(ignored$.layer__time, "tmp")
   expect_equal(ignored$.ignore_type, "dir")
   expect_equal(ignored$.ignore_template, "scratch")
   expect_true(ignored$.ok)
@@ -1251,7 +1482,7 @@ test_that("Ignore templates support when and with arguments", {
 test_that("Problem glimpses print a compact summary from an index", {
   index <- tibble::tibble(
     .rel = c("dir-a/a.txt", "dir-b/b.txt", "dir-a/c.txt"),
-    at_layer = c("data", "data", "data"),
+    .at_layer = c("data", "data", "data"),
     .ok = c(FALSE, FALSE, TRUE),
     .problems = list(
       c("first problem", "second problem"),
@@ -1280,7 +1511,7 @@ test_that("Problem glimpses print a compact summary from an index", {
 test_that("Problem glimpses show small remainders instead of truncating", {
   index <- tibble::tibble(
     .rel = paste0("dir-", 1:6, "/bad.txt"),
-    at_layer = rep("data", 6),
+    .at_layer = rep("data", 6),
     .ok = rep(FALSE, 6),
     .problems = as.list(paste("problem", 1:6))
   )
@@ -1298,7 +1529,7 @@ test_that("Problem glimpses show small remainders instead of truncating", {
 
   one_batch <- tibble::tibble(
     .rel = "dir-a/bad.txt",
-    at_layer = "data",
+    .at_layer = "data",
     .ok = FALSE,
     .problems = list(paste("problem", 1:6))
   )
@@ -1317,7 +1548,7 @@ test_that("Problem glimpses show small remainders instead of truncating", {
 test_that("Problem glimpses do not repeat filenames inside filename messages", {
   index <- tibble::tibble(
     .rel = "ab-02/day02/ab-02_02_yellow.txt",
-    at_layer = "data",
+    .at_layer = "data",
     .ok = FALSE,
     .problems = list(
       "filename 'ab-02_02_yellow.txt' does not match a file template at layer `data`"
@@ -1433,7 +1664,7 @@ test_that("Schema trees format conditional directory templates", {
   )))
 })
 
-test_that("Schema trees show file templates registered on parent layers", {
+test_that("Schema trees show file templates registered on non-terminal layers", {
   ft_schema <- ft_init("demo-root", c("subject", "time", "data")) |>
     ft_add_regex(c(
       subject = "\\w{2}-\\d{2}",

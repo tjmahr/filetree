@@ -742,7 +742,7 @@ ft_add_regex <- function(ft, regexes) {
     values <- if (!is.null(tbl[[nm]])) {
       tbl[[nm]]
     } else {
-      tbl[[paste0("layer__", nm)]]
+      tbl[[paste0(".layer__", nm)]]
     }
 
     if (is.null(values)) {
@@ -752,94 +752,6 @@ ft_add_regex <- function(ft, regexes) {
     }
   }
   ok
-}
-
-.ft_file_template_matches <- function(file_name, row, spec) {
-  if (is.null(spec) || length(spec) == 0) {
-    return(FALSE)
-  }
-
-  row_tbl <- row[1, , drop = FALSE]
-  for (template_i in seq_along(spec$compiled)) {
-    when <- spec$when[[template_i]]
-    if (!.ft_when_matches(row_tbl, when)) {
-      next
-    }
-
-    m <- stringr::str_match(file_name, spec$compiled[[template_i]])
-    if (!is.na(m[, 1])) return(TRUE)
-  }
-
-  FALSE
-}
-
-.ft_candidate_file_layers <- function(ft, n_dir) {
-  layers <- ft$layers
-  default_idx <- n_dir + 1L
-  parent_idx <- n_dir
-  idx <- c(default_idx, parent_idx)
-  idx <- idx[idx >= 1L & idx <= length(layers)]
-  unique(layers[idx])
-}
-
-.ft_resolve_file_layers <- function(tbl, ft, active) {
-  layers <- ft$layers
-  parent_layers <- layers[-length(layers)]
-  has_parent_file_templates <- any(vapply(
-    parent_layers,
-    .ft_has_file_templates,
-    logical(1),
-    ft = ft
-  ))
-  if (!has_parent_file_templates) {
-    return(tbl)
-  }
-
-  dir_layer_cols <- paste0("layer__", layers[-length(layers)])
-  fname <- tbl$.filename
-  n_dirs <- if (length(dir_layer_cols)) {
-    rowSums(!is.na(tbl[, dir_layer_cols, drop = FALSE]))
-  } else {
-    rep(0L, nrow(tbl))
-  }
-
-  parent_has_templates <- rep(FALSE, nrow(tbl))
-  candidate_n_dir <- which(n_dirs >= 1L & n_dirs < length(layers))
-  if (length(candidate_n_dir)) {
-    parent_has_templates[candidate_n_dir] <- vapply(
-      layers[n_dirs[candidate_n_dir]],
-      .ft_has_file_templates,
-      logical(1),
-      ft = ft
-    )
-  }
-
-  for (j in which(active & parent_has_templates)) {
-    n_dir <- n_dirs[[j]]
-    candidates <- .ft_candidate_file_layers(ft, n_dir)
-    if (!length(candidates)) {
-      next
-    }
-
-    fallback_layer <- NA_character_
-    for (layer in candidates) {
-      spec <- ft$file_templates[[layer]]
-      if (is.na(fallback_layer) && .ft_has_file_templates(ft, layer)) {
-        fallback_layer <- layer
-      }
-      if (.ft_file_template_matches(fname[[j]], tbl[j, , drop = FALSE], spec)) {
-        tbl$at_layer[[j]] <- layer
-        break
-      }
-    }
-    if (
-      !is.na(fallback_layer) && !.ft_has_file_templates(ft, tbl$at_layer[[j]])
-    ) {
-      tbl$at_layer[[j]] <- fallback_layer
-    }
-  }
-
-  tbl
 }
 
 # ---- directory templates ----
@@ -862,8 +774,9 @@ ft_add_regex <- function(ft, regexes) {
 #'   `regex_pool`.
 #' @param when Optional named character vector or named list of exact-match
 #'   conditions. A conditional directory template is applied only when every
-#'   condition matches an already extracted field or raw layer value with the
-#'   same name. Use a list when a condition can match any of several values.
+#'   condition matches an already extracted field or raw layer column. Refer to
+#'   raw layer values with `.layer__<name>`, such as `.layer__site`. Use a list
+#'   when a condition can match any of several values.
 #' @param with Optional named character vector of template-local regex
 #'   definitions. These definitions override `ft`'s regex pool for this
 #'   directory template only.
@@ -916,7 +829,7 @@ ft_add_dir_template <- function(
 }
 
 # ---- file templates ----
-# templates validate (and may extract from) the file name at `at_layer`
+# templates validate (and may extract from) the file name at `.at_layer`
 
 #' Register file-name templates for a layer
 #'
@@ -925,8 +838,8 @@ ft_add_dir_template <- function(
 #' a template is matched literally and each template must match the full file
 #' name. For example, `{subject}_{task}.txt` treats `.txt` as a literal
 #' extension, not a regular expression. File templates may be registered on any
-#' configured layer, including layers that also have child directories, so files
-#' such as subject-level manifests can live beside child directories.
+#' configured layer. A layer can have both directory and file templates because
+#' sibling paths may contain either type of component at that position.
 #'
 #' @param ft A `filetree` object.
 #' @param layer Layer name or positive integer position where the files live
@@ -936,9 +849,10 @@ ft_add_dir_template <- function(
 #'   templates using fixed text and `{placeholder}` references tied to `ft`'s
 #'   regex pool.
 #' @param when Optional named character vector or named list of exact-match
-#'   conditions. A conditional file template is applied only when every condition
-#'   matches an extracted field or raw layer value with the same name. Use a
-#'   list when a condition can match any of several values.
+#'   conditions. A conditional file template is applied only when every
+#'   condition matches an extracted field or raw layer column. Refer to raw
+#'   layer values with `.layer__<name>`, such as `.layer__site`. Use a list when
+#'   a condition can match any of several values.
 #' @param with Optional named character vector of template-local regex
 #'   definitions. These definitions override `ft`'s regex pool for this file
 #'   template only.
@@ -1145,7 +1059,7 @@ ft_ignore_file_template <- function(
   } else {
     character()
   }
-  layer_cols <- paste0("layer__", layers)
+  layer_cols <- paste0(".layer__", layers)
 
   layer_mat <- matrix(
     NA_character_,
@@ -1176,7 +1090,7 @@ ft_ignore_file_template <- function(
   tbl <- tibble::tibble(
     .path = files,
     .rel = rel,
-    at_layer = at_layer,
+    .at_layer = at_layer,
     .filename = vapply(
       parts_list,
       function(parts) {
@@ -1205,13 +1119,38 @@ ft_ignore_file_template <- function(
   tbl
 }
 
+.ft_empty_template_match_data <- function() {
+  list(
+    layer = character(),
+    type = character(),
+    name = character(),
+    value = character()
+  )
+}
+
+.ft_add_template_match <- function(matches, rows, layer, type, name, values) {
+  for (row in which(rows)) {
+    match <- matches[[row]]
+    match$layer <- c(match$layer, layer)
+    match$type <- c(match$type, type)
+    match$name <- c(match$name, name)
+    match$value <- c(match$value, values[[row]])
+    matches[[row]] <- match
+  }
+  matches
+}
+
+.ft_as_template_matches <- function(x) {
+  tibble::new_tibble(x, nrow = length(x$layer))
+}
+
 .ft_apply_dir_captures_for_matching <- function(tbl, ft, active) {
   dir_layers <- ft$layers[-length(ft$layers)]
   placeholders <- .ft_all_placeholder_names(ft)
   tbl <- .ft_add_placeholder_columns(tbl, placeholders)
 
   for (layer in dir_layers) {
-    raw_vals <- tbl[[paste0("layer__", layer)]]
+    raw_vals <- tbl[[paste0(".layer__", layer)]]
     spec <- ft$dir_templates[[layer]]
     if (is.null(spec) || length(spec) == 0) {
       next
@@ -1253,14 +1192,19 @@ ft_ignore_file_template <- function(
   tbl
 }
 
-.ft_candidate_file_layers_for_row <- function(ft, tbl, row) {
-  dir_layer_cols <- paste0("layer__", ft$layers[-length(ft$layers)])
+.ft_file_layer_for_row <- function(ft, tbl, row) {
+  dir_layer_cols <- paste0(".layer__", ft$layers[-length(ft$layers)])
   n_dir <- if (length(dir_layer_cols)) {
     sum(!is.na(tbl[row, dir_layer_cols, drop = TRUE]))
   } else {
     0L
   }
-  .ft_candidate_file_layers(ft, n_dir)
+  idx <- n_dir + 1L
+  if (idx > length(ft$layers)) {
+    NA_character_
+  } else {
+    ft$layers[[idx]]
+  }
 }
 
 .ft_classify_ignored <- function(tbl, ft, active) {
@@ -1285,7 +1229,7 @@ ft_ignore_file_template <- function(
       next
     }
 
-    raw_vals <- match_tbl[[paste0("layer__", layer)]]
+    raw_vals <- match_tbl[[paste0(".layer__", layer)]]
     layer_rows <- active & !ignored & !is.na(raw_vals)
     if (!any(layer_rows)) {
       next
@@ -1312,32 +1256,30 @@ ft_ignore_file_template <- function(
 
   file_name <- match_tbl$.filename
   for (row in which(active & !ignored)) {
-    candidates <- .ft_candidate_file_layers_for_row(ft, match_tbl, row)
-    for (layer in candidates) {
-      spec <- ft$ignore_file_templates[[layer]]
-      if (is.null(spec) || length(spec) == 0) {
+    layer <- .ft_file_layer_for_row(ft, match_tbl, row)
+    if (is.na(layer)) {
+      next
+    }
+    spec <- ft$ignore_file_templates[[layer]]
+    if (is.null(spec) || length(spec) == 0) {
+      next
+    }
+
+    row_tbl <- match_tbl[row, , drop = FALSE]
+    for (template_i in seq_along(spec$compiled)) {
+      if (!.ft_when_matches(row_tbl, spec$when[[template_i]])) {
         next
       }
 
-      row_tbl <- match_tbl[row, , drop = FALSE]
-      for (template_i in seq_along(spec$compiled)) {
-        if (!.ft_when_matches(row_tbl, spec$when[[template_i]])) {
-          next
-        }
-
-        m <- stringr::str_match(file_name[[row]], spec$compiled[[template_i]])
-        if (is.na(m[, 1])) {
-          next
-        }
-
-        ignored[[row]] <- TRUE
-        ignore_template[[row]] <- names(spec$compiled)[[template_i]]
-        ignore_type[[row]] <- "file"
-        break
+      m <- stringr::str_match(file_name[[row]], spec$compiled[[template_i]])
+      if (is.na(m[, 1])) {
+        next
       }
-      if (ignored[[row]]) {
-        break
-      }
+
+      ignored[[row]] <- TRUE
+      ignore_template[[row]] <- names(spec$compiled)[[template_i]]
+      ignore_type[[row]] <- "file"
+      break
     }
   }
 
@@ -1384,7 +1326,7 @@ ft_list <- function(ft, include_ignored = FALSE) {
   path_info <- path_data$path_info
   active <- path_info$under_root &
     !path_info$at_root &
-    path_data$tbl$at_layer != ".__too_deep__"
+    path_data$tbl$.at_layer != ".__too_deep__"
   ignore <- .ft_classify_ignored(path_data$tbl, ft, active)
   files[!ignore$ignored]
 }
@@ -1453,9 +1395,8 @@ ft_list <- function(ft, include_ignored = FALSE) {
 #' Index files against a filetree specification
 #'
 #' Validate file paths against the configured directory and file-name templates,
-#' extract placeholder captures, and report any problems. File templates
-#' registered on nearby layers are considered before unmatched files are
-#' reported.
+#' extract placeholder captures, and report any problems. Each file is matched
+#' against templates at the layer implied by its position in the relative path.
 #'
 #' @param ft A `filetree` object.
 #' @param files Optional character vector of file paths to check. Defaults to
@@ -1465,11 +1406,18 @@ ft_list <- function(ft, include_ignored = FALSE) {
 #'   accepted so partial schemas can be used for exploratory indexing.
 #' @param include_ignored Logical. If `TRUE`, include ignored files as inert
 #'   audit rows. If `FALSE`, ignored files are pruned before validation.
-#' @return A tibble with `.path`, `.rel`, `at_layer`, `.filename`, layer
-#'   columns (`layer__<name>`), captured placeholders, the matched template
-#'   name, `.ok` flag, and `.problems` list-column. The `.filename` column
-#'   stores the basename matched by file templates; `at_layer` identifies the
-#'   layer whose file templates own that basename.
+#' @param include_templates Logical. If `TRUE`, include a `.templates`
+#'   list-column containing long-form records of every matched directory and
+#'   file template. If `FALSE`, omit these detailed audit records.
+#' @return A tibble with `.path`, `.rel`, `.at_layer`, `.filename`, raw layer
+#'   columns (`.layer__<name>`), captured placeholders, the matched
+#'   `.file_template`, an `.ok` flag, and a `.problems` list-column. When
+#'   `include_templates = TRUE`, the result also contains a `.templates`
+#'   list-column. Each element is a tibble with character columns `layer`,
+#'   `type`, `name`, and `value`, with one row per matched directory or file
+#'   template. The `.filename` column stores the basename matched by file
+#'   templates; `.at_layer` identifies the layer occupied by that basename.
+#'   Unmatched, invalid, and ignored rows contain `NA` in `.file_template`.
 #' @examples
 #' root <- system.file("demo-1", package = "filetree")
 #'
@@ -1500,7 +1448,8 @@ ft_index <- function(
   ft,
   files = ft_list(ft, include_ignored = include_ignored),
   strict = FALSE,
-  include_ignored = FALSE
+  include_ignored = FALSE,
+  include_templates = FALSE
 ) {
   .ft_check_filetree(ft)
   if (!is.logical(strict) || length(strict) != 1 || is.na(strict)) {
@@ -1513,7 +1462,13 @@ ft_index <- function(
   ) {
     .ft_abort_arg("include_ignored", "must be `TRUE` or `FALSE`.")
   }
-
+  if (
+    !is.logical(include_templates) ||
+      length(include_templates) != 1 ||
+      is.na(include_templates)
+  ) {
+    .ft_abort_arg("include_templates", "must be `TRUE` or `FALSE`.")
+  }
   path_data <- .ft_path_table(ft, files)
   path_info <- path_data$path_info
   outside_root <- !path_info$under_root
@@ -1526,18 +1481,23 @@ ft_index <- function(
   tbl <- path_data$tbl
 
   # extracted fields = placeholders not in layers (but captures may include layer names too;
-  # those should become extracted fields columns, not collide with layer__ columns)
+  # those should become extracted fields columns, not collide with .layer__ columns)
   all_placeholders <- .ft_all_placeholder_names(ft)
 
   # create columns for ALL placeholders (speaker/visit/task/item/etc.)
   # even if a placeholder name equals a layer name, it is still an extracted field column,
-  # because the raw layer component is stored in layer__<layer>.
+  # because the raw layer component is stored in .layer__<layer>.
   if (length(all_placeholders)) {
     tbl <- .ft_add_placeholder_columns(tbl, all_placeholders)
   }
 
   n <- nrow(tbl)
-  matched_template <- rep(NA_character_, n)
+  tbl$.file_template <- rep(NA_character_, n)
+  template_matches <- if (include_templates) {
+    rep(list(.ft_empty_template_match_data()), n)
+  } else {
+    NULL
+  }
   problems <- vector("list", n)
 
   # helper: write captures with conflict checking against existing extracted field
@@ -1600,8 +1560,8 @@ ft_index <- function(
   }
 
   # pre-flag structural problems
-  bad_root <- is.na(tbl$at_layer) | at_or_above_root
-  too_deep <- tbl$at_layer == ".__too_deep__" & !bad_root
+  bad_root <- is.na(tbl$.at_layer) | at_or_above_root
+  too_deep <- tbl$.at_layer == ".__too_deep__" & !bad_root
   if (any(too_deep)) {
     for (j in which(too_deep)) {
       problems[[j]] <- c(
@@ -1626,7 +1586,7 @@ ft_index <- function(
     tbl <- tbl[keep, , drop = FALSE]
     at_or_above_root <- at_or_above_root[keep]
     problems <- problems[keep]
-    matched_template <- matched_template[keep]
+    template_matches <- template_matches[keep]
     active <- active[keep]
     n <- nrow(tbl)
   } else if (include_ignored) {
@@ -1638,7 +1598,7 @@ ft_index <- function(
 
   # ---- validate / extract from directory names (dir_layers only) ----
   for (layer in dir_layers) {
-    raw_vals <- tbl[[paste0("layer__", layer)]]
+    raw_vals <- tbl[[paste0(".layer__", layer)]]
     spec <- ft$dir_templates[[layer]]
     if (is.null(spec) || length(spec) == 0) {
       next
@@ -1662,6 +1622,17 @@ ft_index <- function(
       ok <- template_rows & !is.na(m[, 1]) & !matched
       if (!any(ok)) {
         next
+      }
+
+      if (include_templates) {
+        template_matches <- .ft_add_template_match(
+          template_matches,
+          ok,
+          layer,
+          "dir",
+          names(spec$compiled)[[template_i]],
+          raw_vals
+        )
       }
 
       cap_names <- setdiff(colnames(m), "")
@@ -1701,13 +1672,11 @@ ft_index <- function(
     }
   }
 
-  tbl <- .ft_resolve_file_layers(tbl, ft, active)
-
-  # ---- validate / extract from file name via templates at at_layer ----
+  # ---- validate / extract from file name via templates at .at_layer ----
   fname <- tbl$.filename
   for (layer in names(ft$file_templates)) {
     spec <- ft$file_templates[[layer]]
-    layer_rows <- active & tbl$at_layer == layer
+    layer_rows <- active & tbl$.at_layer == layer
     if (!any(layer_rows)) {
       next
     }
@@ -1721,7 +1690,7 @@ ft_index <- function(
           problems[[j]],
           sprintf(
             "no file templates registered for `%s` files",
-            tbl$at_layer[[j]]
+            tbl$.at_layer[[j]]
           )
         )
       }
@@ -1746,7 +1715,17 @@ ft_index <- function(
         next
       }
 
-      matched_template[ok] <- template_name
+      tbl$.file_template[ok] <- template_name
+      if (include_templates) {
+        template_matches <- .ft_add_template_match(
+          template_matches,
+          ok,
+          layer,
+          "file",
+          template_name,
+          fname
+        )
+      }
       cap_names <- setdiff(colnames(m), "")
       regex_pool <- spec$regex_pool[[template_i]]
       if (is.null(regex_pool)) {
@@ -1779,7 +1758,7 @@ ft_index <- function(
           sprintf(
             "filename '%s' does not match an applicable file template at layer `%s`",
             fname[[j]],
-            tbl$at_layer[[j]]
+            tbl$.at_layer[[j]]
           )
         )
       }
@@ -1793,20 +1772,26 @@ ft_index <- function(
           sprintf(
             "filename '%s' does not match a file template at layer `%s`",
             fname[[j]],
-            tbl$at_layer[[j]]
+            tbl$.at_layer[[j]]
           )
         )
       }
     }
   }
 
-  tbl$template <- matched_template
+  if (include_templates) {
+    tbl$.templates <- lapply(template_matches, .ft_as_template_matches)
+  }
   tbl$.problems <- problems
   tbl$.ok <- lengths(problems) == 0
+  tbl$.file_template[!tbl$.ok] <- NA_character_
 
-  # order columns: raw layer__ columns, then extracted fields, then diagnostics
-  core <- c(".path", ".rel", "at_layer", ".filename", layer_cols)
-  diag <- c("template")
+  # order columns: raw .layer__ columns, then extracted fields, then diagnostics
+  core <- c(".path", ".rel", ".at_layer", ".filename", layer_cols)
+  diag <- ".file_template"
+  if (include_templates) {
+    diag <- c(diag, ".templates")
+  }
   if (include_ignored) {
     diag <- c(diag, ".ignored", ".ignore_template", ".ignore_type")
   }
@@ -1850,7 +1835,7 @@ ft_index <- function(
 #'
 #' @param x A `filetree` object or an index tibble returned by [ft_index()].
 #' @param n Maximum number of problem batches to print. Batches group problem
-#'   files by `at_layer` and parent directory.
+#'   files by `.at_layer` and parent directory.
 #' @param n_lines Maximum number of problem lines to print in each batch. When
 #'   the hidden remainder would be less than 20% of the batch, all lines are
 #'   printed.
@@ -1953,8 +1938,8 @@ ft_glimpse_problems <- function(x, n = 10, n_lines = 10, ...) {
     return(list(total = 0L))
   }
 
-  at_layer <- if ("at_layer" %in% names(problem_rows)) {
-    problem_rows$at_layer
+  at_layer <- if (".at_layer" %in% names(problem_rows)) {
+    problem_rows$.at_layer
   } else {
     rep(NA_character_, nrow(problem_rows))
   }

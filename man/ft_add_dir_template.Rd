@@ -19,8 +19,9 @@ using fixed text and \code{{placeholder}} references that point into \code{ft}'s
 
 \item{when}{Optional named character vector or named list of exact-match
 conditions. A conditional directory template is applied only when every
-condition matches an already extracted field or raw layer value with the
-same name. Use a list when a condition can match any of several values.}
+condition matches an already extracted field or raw layer column. Refer to
+raw layer values with \verb{.layer__<name>}, such as \code{.layer__site}. Use a list
+when a condition can match any of several values.}
 
 \item{with}{Optional named character vector of template-local regex
 definitions. These definitions override \code{ft}'s regex pool for this

@@ -8,7 +8,8 @@ ft_index(
   ft,
   files = ft_list(ft, include_ignored = include_ignored),
   strict = FALSE,
-  include_ignored = FALSE
+  include_ignored = FALSE,
+  include_templates = FALSE
 )
 }
 \arguments{
@@ -23,19 +24,26 @@ accepted so partial schemas can be used for exploratory indexing.}
 
 \item{include_ignored}{Logical. If \code{TRUE}, include ignored files as inert
 audit rows. If \code{FALSE}, ignored files are pruned before validation.}
+
+\item{include_templates}{Logical. If \code{TRUE}, include a \code{.templates}
+list-column containing long-form records of every matched directory and
+file template. If \code{FALSE}, omit these detailed audit records.}
 }
 \value{
-A tibble with \code{.path}, \code{.rel}, \code{at_layer}, \code{.filename}, layer
-columns (\verb{layer__<name>}), captured placeholders, the matched template
-name, \code{.ok} flag, and \code{.problems} list-column. The \code{.filename} column
-stores the basename matched by file templates; \code{at_layer} identifies the
-layer whose file templates own that basename.
+A tibble with \code{.path}, \code{.rel}, \code{.at_layer}, \code{.filename}, raw layer
+columns (\verb{.layer__<name>}), captured placeholders, the matched
+\code{.file_template}, an \code{.ok} flag, and a \code{.problems} list-column. When
+\code{include_templates = TRUE}, the result also contains a \code{.templates}
+list-column. Each element is a tibble with character columns \code{layer},
+\code{type}, \code{name}, and \code{value}, with one row per matched directory or file
+template. The \code{.filename} column stores the basename matched by file
+templates; \code{.at_layer} identifies the layer occupied by that basename.
+Unmatched, invalid, and ignored rows contain \code{NA} in \code{.file_template}.
 }
 \description{
 Validate file paths against the configured directory and file-name templates,
-extract placeholder captures, and report any problems. File templates
-registered on nearby layers are considered before unmatched files are
-reported.
+extract placeholder captures, and report any problems. Each file is matched
+against templates at the layer implied by its position in the relative path.
 }
 \examples{
 root <- system.file("demo-1", package = "filetree")

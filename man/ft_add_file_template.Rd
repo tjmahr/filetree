@@ -18,9 +18,10 @@ templates using fixed text and \code{{placeholder}} references tied to \code{ft}
 regex pool.}
 
 \item{when}{Optional named character vector or named list of exact-match
-conditions. A conditional file template is applied only when every condition
-matches an extracted field or raw layer value with the same name. Use a
-list when a condition can match any of several values.}
+conditions. A conditional file template is applied only when every
+condition matches an extracted field or raw layer column. Refer to raw
+layer values with \verb{.layer__<name>}, such as \code{.layer__site}. Use a list when
+a condition can match any of several values.}
 
 \item{with}{Optional named character vector of template-local regex
 definitions. These definitions override \code{ft}'s regex pool for this file
@@ -35,8 +36,8 @@ complete file names for files that belong to a specific layer. Fixed text in
 a template is matched literally and each template must match the full file
 name. For example, \verb{\{subject\}_\{task\}.txt} treats \code{.txt} as a literal
 extension, not a regular expression. File templates may be registered on any
-configured layer, including layers that also have child directories, so files
-such as subject-level manifests can live beside child directories.
+configured layer. A layer can have both directory and file templates because
+sibling paths may contain either type of component at that position.
 }
 \examples{
 root <- system.file("demo-1", package = "filetree")

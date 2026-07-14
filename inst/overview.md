@@ -46,8 +46,9 @@ design favors explicit schemas and inspectable output over hidden conventions.
 - It does not persist indexes or cache filesystem scans.
 - It does not model multiple independent schema groups; templates are registered
   directly by layer.
-- It does not enforce a one-file-layer-only tree. File templates may be attached
-  to any configured layer so sidecar files can live beside child directories.
+- It does not enforce a one-file-layer-only tree. Directory and file templates
+  may both be attached to a layer as alternatives for that path position, so
+  sidecar files can live beside directories on sibling paths.
 - The README examples are user-owned generated documentation. Edit
   `README.Rmd`, not `README.md`, unless explicitly handling generated output.
 
@@ -131,7 +132,7 @@ syntax. Recursive expansion is validated for missing names and cycles.
 Directory and file templates can also include:
 
 - `when`: exact-match conditions on already extracted fields or raw
-  `layer__<name>` values.
+  `.layer__<name>` values.
 - `with`: template-local regex overrides that apply to that template without
   changing the global regex pool.
 
@@ -175,31 +176,35 @@ sequenceDiagram
     Index->>Index: compute relative paths and raw layer columns
     Index->>Dir: match directory components
     Dir-->>Index: extracted parent values and directory problems
-    Index->>File: resolve candidate file layer and match filename
-    File-->>Index: template name, captures, and filename problems
+    Index->>File: match filename at its path-depth layer
+    File-->>Index: template match, captures, and filename problems
     Index->>Tibble: assemble diagnostics
     Tibble-->>Caller: .ok and .problems columns
 ```
 
 `ft_index()` first converts files to paths relative to `ft$root`, splits each
 relative path into directory components plus a basename, fills raw
-`layer__<name>` columns from directory components, and stores the basename in
-`.filename`. It assigns an initial `at_layer` from path depth with
-`.ft_at_layer_from_parts()`.
+`.layer__<name>` columns from directory components, and stores the basename in
+`.filename`. It assigns `.at_layer` from path depth. Component position is
+authoritative: a component at a layer may be a directory or a file, but not
+both.
 
 Before validation, ignore templates classify paths. By default, ignored files
 are dropped. With `include_ignored = TRUE`, ignored files remain in the index as
 inert audit rows with `.ignored = TRUE`, `.ignore_template`, `.ignore_type`,
 `.ok = TRUE`, and empty `.problems`. Ignored rows keep path-derived columns
-such as `.path`, `.rel`, `at_layer`, `.filename`, and `layer__<name>`, but they
-do not participate in directory validation, file validation, capture extraction,
-conflict checks, or strict-mode diagnostics.
+such as `.path`, `.rel`, `.at_layer`, `.filename`, and `.layer__<name>`, but
+they do not participate in directory validation, file validation, template
+match recording, capture extraction, conflict checks, or strict-mode
+diagnostics.
 
 For performance, `ft_index()` uses a fast relative-path path when supplied files
 are already under `ft$root`, and falls back to `fs::path_rel()` only for paths
-outside that direct prefix. File-layer resolution is skipped unless an
-immediate parent layer has registered file templates, which avoids row-wise
-alternate-owner checks for ordinary data-file trees.
+outside that direct prefix. File templates are checked only at the layer
+implied by path depth, so indexing does not perform row-wise alternate-owner
+searches. By default, the index records only the winning file-template name and
+does not accumulate or construct per-path long-form template audit tibbles. Set
+`include_templates = TRUE` when those detailed records are needed.
 
 `ft_list()` also applies ignore templates by default so callers can prune files
 before building an index. Use `include_ignored = TRUE` to list every file under
@@ -212,23 +217,40 @@ Directory templates are applied before file templates. This matters because file
 templates may depend on parent metadata through `when`, and because file captures
 are checked against values already extracted from parent directories.
 
-After directory extraction, `.ft_resolve_file_layers()` refines `at_layer` for
-files whose basename may be owned by a nearby layer other than the depth-based
-default. This is what allows subject-level manifests and terminal data files to
-share the same model: `.filename` stores the basename, and `at_layer` identifies
-which layer's file templates validate it.
+A file directly below a subject directory occupies the next configured layer.
+For example, with layers `subject / time / data`, both a `time` directory and a
+manifest file beside time directories occupy the `time` layer on their
+respective paths. A template registered at an already consumed parent layer
+cannot reclassify a later filename into that layer.
+
+Directory and file templates may both be registered at the same layer because
+they describe alternative component types on sibling paths. Registration at a
+layer is not itself evidence that a file belongs there: path depth remains
+authoritative, and a template registered at another depth is not considered.
 
 The returned tibble contains:
 
-- `.path`, `.rel`, and `at_layer` for path identity and classification.
+- `.path`, `.rel`, and `.at_layer` for path identity and classification.
 - `.filename`, the raw basename matched by file templates.
-- `layer__<name>` columns for raw directory path components.
+- `.layer__<name>` columns for raw directory path components.
 - one column for every placeholder used by registered templates.
-- `template`, the matched file template name when one matched.
+- `.file_template`, the name of the file template that matched `.filename`, or
+  `NA` when the row is unmatched, invalid, or ignored.
+- `.templates` when `include_templates = TRUE`, a list-column of tibbles with
+  character columns `layer`, `type`, `name`, and `value`. Each row records one
+  matched directory or file template. Inert ignored rows contain a typed empty
+  tibble.
 - `.ignored`, `.ignore_template`, and `.ignore_type` when
   `include_ignored = TRUE`.
 - `.ok`, a logical problem flag.
 - `.problems`, a list-column of user-facing diagnostic messages.
+
+When requested, rows inside each `.templates` tibble follow path order, with
+directory matches before the filename match. A successful template match is
+recorded even when a captured value conflicts with an earlier extracted value.
+Paths with no successful matches contain the same typed empty tibble used by
+ignored audit rows. Ignore matches remain in `.ignore_template` and
+`.ignore_type`; they are not duplicated in `.templates`.
 
 ## Diagnostics
 
@@ -238,7 +260,7 @@ Problem messages are stored as strings in `.problems`. Some messages include
 `cli::cli_bullets()`.
 
 `ft_glimpse_problems()` groups printed problems by parent directory and
-`at_layer`. The `n` argument controls how many problem batches are previewed,
+`.at_layer`. The `n` argument controls how many problem batches are previewed,
 and `n_lines` controls how many problem lines are printed within each batch.
 Small hidden remainders are printed in full instead of summarized.
 
@@ -297,7 +319,7 @@ exercise:
 - ignored file templates, ignored directory subtrees, and ignored audit rows;
 - placeholder names with underscores;
 - user-facing problem messages;
-- sidecar files registered on parent layers;
+- sidecar files registered at their path-depth layer;
 - schema tree formatting;
 - experimental flat schema formatting;
 - S3 `format()` and `print()` output.
@@ -318,8 +340,9 @@ Current local test guidance from project notes: `devtools::document()`,
 | Package namespace | `NAMESPACE` | exported functions and S3 methods |
 | Core implementation | `R/filetree.R` | `ft_init()`, `ft_set_root()`, `ft_add_regex()`, `ft_add_dir_template()`, `ft_add_file_template()`, `ft_ignore_dir_template()`, `ft_ignore_file_template()`, `ft_index()` |
 | template compilation | `R/filetree.R` | `.ft_placeholders()`, `.ft_compile_template()`, `.ft_expand_pool_regex()`, `.ft_recompile_templates()` |
-| Conditional matching | `R/filetree.R` | `.ft_normalize_when()`, `.ft_when_matches()`, `.ft_file_template_matches()` |
-| File-layer resolution | `R/filetree.R` | `.ft_at_layer_from_parts()`, `.ft_candidate_file_layers()`, `.ft_resolve_file_layers()` |
+| Conditional matching | `R/filetree.R` | `.ft_normalize_when()`, `.ft_when_matches()` |
+| Path and file layers | `R/filetree.R` | `.ft_path_table()`, `.ft_at_layer_from_parts()`, `.ft_file_layer_for_row()` |
+| Template match output | `R/filetree.R` | `.ft_empty_template_match_data()`, `.ft_add_template_match()`, `.ft_as_template_matches()` |
 | Layer resolution | `R/filetree.R` | `.ft_resolve_layer()`, `.ft_is_integerish()` |
 | Ignore classification | `R/filetree.R` | `.ft_classify_ignored()`, `.ft_has_ignore_templates()` |
 | Diagnostics | `R/filetree.R` | `ft_glimpse_problems()`, `.ft_validate_index()` |
@@ -342,7 +365,9 @@ Current local test guidance from project notes: `devtools::document()`,
 | regex pool | Named field regexes reusable from `{placeholder}` syntax. |
 | placeholder | A `{name}` token in a component template that compiles to a capture using a regex pool entry. |
 | extracted field | A tibble column produced by captures from directory or file templates. |
-| `layer__<name>` | A raw directory path-component column in the index tibble. |
+| `.layer__<name>` | A raw directory path-component column in the index tibble. |
 | `.filename` | The raw basename matched by file and ignored-file templates. |
-| `at_layer` | The layer whose file templates own `.filename`. |
-| sidecar file | A file that belongs to a non-terminal layer, such as a subject manifest beside time directories. |
+| `.at_layer` | The path-depth layer occupied by `.filename`. |
+| `.file_template` | The matched ordinary file-template name; unmatched, invalid, and ignored rows contain `NA`. |
+| `.templates` | Optional per-path long-form records of successful directory and file template matches. |
+| sidecar file | A file that occupies a layer where sibling paths may instead contain child directories. |
