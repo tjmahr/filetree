@@ -2500,7 +2500,7 @@ format.filetree <- function(x, ..., width = getOption("width")) {
       collapse = ", "
     )
     if (nchar(out) > 90) {
-      out <- paste0(substr(out, 1, 87), "\u2026")
+      out <- paste0(substr(out, 1, 87), "...")
     }
     out
   }

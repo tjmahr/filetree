@@ -1914,6 +1914,19 @@ test_that("Formatted filetrees use the current layer display contract", {
   expect_false(any(grepl("at_layer=", plain, fixed = TRUE)))
 })
 
+test_that("Formatted filetrees use portable template truncation markers", {
+  long_template <- paste0(rep("x", 100), collapse = "")
+  ft_schema <- ft_init("demo-root", c("subject", "data")) |>
+    ft_add_file_template("data", c(long = long_template))
+
+  plain <- cli::ansi_strip(format(ft_schema))
+  combined <- paste(plain, collapse = "\n")
+  raw_output <- charToRaw(combined)
+
+  expect_lte(max(as.integer(raw_output)), 127)
+  expect_match(combined, "\\.\\.\\.")
+})
+
 test_that("Schema trees hide default template names only for singleton layers", {
   ft_single <- ft_init("demo-root", c("subject", "data")) |>
     ft_add_regex(c(subject = "\\w{2}-\\d{2}", task = "red|green")) |>
